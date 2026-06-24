@@ -659,9 +659,10 @@ function CashUpForm({ branch, branchId, supervisorId, date, rates, existingData,
                  upd[index] = newVal;
                  setCashBreakdown(upd);
                }} currencies={currencies} onChange={(setterFn: any, itm: any, fld: string, val: any) => {
-                 const upd = { ...itm, [fld]: val };
+                 const parsedVal = fld === 'amount' ? (val === '' ? 0 : parseFloat(val)) : val;
+                 const upd = { ...itm, [fld]: parsedVal };
                  if (fld === 'amount' || fld === 'currencyCode') {
-                    const amt = fld === 'amount' ? parseFloat(val) : parseFloat(itm.amount);
+                    const amt = fld === 'amount' ? (val === '' ? 0 : parseFloat(val)) : parseFloat(itm.amount as string);
                     const code = fld === 'currencyCode' ? val : itm.currencyCode;
                     upd.usdEquivalent = getUsd(amt || 0, code);
                  }
@@ -922,8 +923,8 @@ function ReconListField({ title, items, setItems, currencies, getUsd }: any) {
                 <input type="number" step="0.01" min="0" value={item.amount === 0 && item.description === '' ? '' : item.amount} onChange={e => {
                   const newArr = [...items];
                   const rawVal = e.target.value;
-                  const val = parseFloat(rawVal) || 0;
-                  newArr[idx].amount = rawVal;
+                  const val = rawVal === '' ? 0 : parseFloat(rawVal);
+                  newArr[idx].amount = val;
                   newArr[idx].usdEquivalent = getUsd(val, newArr[idx].currencyCode);
                   setItems(newArr);
                 }} className="flex-1 bg-[#061121] px-4 py-2 text-white focus:outline-none" placeholder="0.00" />

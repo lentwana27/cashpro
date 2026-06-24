@@ -320,8 +320,8 @@ export function DirectorDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl p-6 shadow-xl w-full">
           <h2 className="text-lg font-semibold text-white mb-6">Sales Trend</h2>
-          <div className="h-72 w-full" style={{ minWidth: 0, minHeight: 0 }}>
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="w-full">
+            <ResponsiveContainer width="100%" height={300}>
               <AreaChart data={charData}>
                 <defs>
                   <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
@@ -341,8 +341,8 @@ export function DirectorDashboard() {
 
         <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl p-6 shadow-xl w-full">
           <h2 className="text-lg font-semibold text-white mb-6">Variance Tracking</h2>
-          <div className="h-72 w-full" style={{ minWidth: 0, minHeight: 0 }}>
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="w-full">
+            <ResponsiveContainer width="100%" height={300}>
               <BarChart data={charData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e345e" vertical={false} />
                 <XAxis dataKey="date" stroke="#64748b" tickFormatter={str => format(new Date(str), 'MMM d')} />
