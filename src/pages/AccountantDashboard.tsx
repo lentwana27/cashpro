@@ -56,7 +56,14 @@ export function AccountantDashboard() {
 
   const filteredRecon = reconciliations
     .filter(r => filterStatus === 'ALL' || r.status === filterStatus)
-    .filter(r => !searchBranch || r.branchId.toLowerCase().includes(searchBranch.toLowerCase()))
+    .filter(r => {
+      if (!searchBranch) return true;
+      const b = branches.find(b => b.id === r.branchId);
+      const bName = b?.name?.toLowerCase() || '';
+      const bId = r.branchId.toLowerCase();
+      const s = searchBranch.toLowerCase();
+      return bId.includes(s) || bName.includes(s);
+    })
     .filter(r => !filterDate || r.date === filterDate)
     .sort((a, b) => {
       if (sortField === 'date') {
@@ -92,9 +99,9 @@ export function AccountantDashboard() {
       parseFloat(getSum(r.returnsRefunds).toFixed(2)),
       parseFloat(getSum(r.expenses).toFixed(2)),
       parseFloat(getSum(r.purchases).toFixed(2)),
-      parseFloat(r.expectedCashUsd.toFixed(2)),
-      parseFloat(r.endOfDayCash.usdEquivalent.toFixed(2)),
-      parseFloat(r.varianceUsd.toFixed(2)),
+      parseFloat((r.expectedCashUsd || 0).toFixed(2)),
+      parseFloat((r.endOfDayCash?.usdEquivalent || 0).toFixed(2)),
+      parseFloat((r.varianceUsd || 0).toFixed(2)),
       r.status,
       r.notes || '',
       r.amendmentNotes?.join(' | ') || ''
@@ -106,10 +113,27 @@ export function AccountantDashboard() {
     XLSX.writeFile(workbook, `Reconciliations_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
   };
 
-  const missingBranches = branches.filter(b => {
-    if (b.status !== 'ACTIVE') return false;
-    return !reconciliations.some(r => r.branchId === b.id && r.date === filterDate);
-  });
+  const missingReconciliations = React.useMemo(() => {
+    const missing: { branchName: string; date: string }[] = [];
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    
+    branches.forEach(b => {
+      if (b.status !== 'ACTIVE') return;
+      for (let i = 1; i <= 7; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        const dStr = format(d, 'yyyy-MM-dd');
+        
+        const hasRecon = reconciliations.some(r => r.branchId === b.id && r.date === dStr);
+        if (!hasRecon) {
+          missing.push({ branchName: b.name || b.id, date: dStr });
+        }
+      }
+    });
+    
+    return missing.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [branches, reconciliations]);
 
   return (
     <div className="space-y-6">
@@ -133,19 +157,25 @@ export function AccountantDashboard() {
         </div>
       </div>
 
-      {missingBranches.length > 0 && filterDate && (
-        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex gap-4 items-start shadow-sm">
-          <AlertOctagon className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-          <div>
-            <h3 className="text-amber-500 font-semibold mb-1 text-sm">Missing Submissions for {format(new Date(filterDate), 'MMM d, yyyy')}</h3>
-            <p className="text-slate-300 text-sm">{missingBranches.length} branches have not submitted their reconciliation for this date:</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {missingBranches.map(b => (
-                <span key={b.id} className="text-xs bg-[#0a192f] border border-[#1e345e] text-slate-300 px-2 py-1 rounded">
-                  {b.name} ({b.id})
-                </span>
-              ))}
-            </div>
+      {missingReconciliations.length > 0 && (
+        <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-6 shadow-inner">
+          <div className="flex items-center gap-3 mb-4">
+            <AlertOctagon className="w-6 h-6 text-rose-400" />
+            <h3 className="text-lg font-bold text-rose-400">Missing Reconciliations Alert</h3>
+          </div>
+          <p className="text-sm text-rose-300 mb-4">The following branches have missed their daily reconciliations in the last 7 days. They must request an unlock to fill these in.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {missingReconciliations.slice(0, 9).map((m, idx) => (
+              <div key={idx} className="bg-rose-500/5 p-3 rounded-lg border border-rose-500/10 flex justify-between items-center text-sm">
+                <span className="font-semibold text-rose-200">{m.branchName}</span>
+                <span className="text-rose-400/80 font-mono">{format(new Date(m.date), 'MMM d, yyyy')}</span>
+              </div>
+            ))}
+            {missingReconciliations.length > 9 && (
+              <div className="bg-rose-500/5 p-3 rounded-lg border border-rose-500/10 flex justify-center items-center text-sm text-rose-300">
+                + {missingReconciliations.length - 9} more missing
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -224,13 +254,13 @@ export function AccountantDashboard() {
                     </td>
                     <td className="px-6 py-4 font-medium text-white">{branches.find(b => b.id === r.branchId)?.name || r.branchId}</td>
                     <td className="px-6 py-4 text-slate-300">{format(new Date(r.date), 'MMM d, yyyy')}</td>
-                    <td className="px-6 py-4 text-right font-mono">${(Array.isArray(r.totalSales) ? r.totalSales.reduce((a:number,b:any)=>a+b.usdEquivalent,0) : (r.totalSales?.usdEquivalent || 0)).toFixed(2)}</td>
-                    <td className="px-6 py-4 text-right font-mono">${r.endOfDayCash.usdEquivalent.toFixed(2)}</td>
+                    <td className="px-6 py-4 text-right font-mono">${(Array.isArray(r.totalSales) ? r.totalSales.reduce((a:number,b:any)=>a+(b.usdEquivalent||0),0) : (r.totalSales?.usdEquivalent || 0)).toFixed(2)}</td>
+                    <td className="px-6 py-4 text-right font-mono">${(r.endOfDayCash?.usdEquivalent || 0).toFixed(2)}</td>
                     <td className={clsx("px-6 py-4 text-right font-mono font-bold", 
-                      r.varianceUsd > 0 ? "text-emerald-400" :
-                      r.varianceUsd < 0 ? "text-rose-400" : "text-blue-400"
+                      (r.varianceUsd || 0) > 0 ? "text-emerald-400" :
+                      (r.varianceUsd || 0) < 0 ? "text-rose-400" : "text-blue-400"
                     )}>
-                      {r.varianceUsd > 0 ? '+' : ''}{r.varianceUsd.toFixed(2)}
+                      {(r.varianceUsd || 0) > 0 ? '+' : ''}{(r.varianceUsd || 0).toFixed(2)}
                     </td>
                     <td className="px-6 py-4 text-center">
                       <span className={clsx("px-2 py-1 rounded text-xs font-semibold", 
@@ -256,6 +286,11 @@ export function AccountantDashboard() {
                             <AlertOctagon className="w-4 h-4" />
                           </button>
                         </>
+                      )}
+                      {r.status === 'UNLOCK_REQUESTED' && (
+                        <button onClick={() => updateStatus(r.id, 'UNLOCK_APPROVED')} className="px-3 py-1 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/20 rounded text-xs font-bold transition-colors">
+                          Approve Unlock
+                        </button>
                       )}
                       {r.status === 'AMENDMENT_REQUESTED' && (
                         <button onClick={() => updateStatus(r.id, 'AMENDMENT_APPROVED')} className="px-3 py-1 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 rounded text-xs font-bold transition-colors">
@@ -294,6 +329,18 @@ export function AccountantDashboard() {
                               </div>
                             </div>
                           </div>
+                          
+                          {r.tillCashBreakdown && r.tillCashBreakdown.length > 0 && (
+                            <div className="px-6 pb-6">
+                              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-[#1e345e] pb-2">Physical Cash Breakdown</h4>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div className="space-y-4">
+                                  <BreakdownSection title="Physical Cash Counted" items={r.tillCashBreakdown} />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
                           {(r.notes || r.signature || (r.amendmentNotes && r.amendmentNotes.length > 0)) && (
                             <div className="px-6 pb-6 mt-2">
                               <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-[#1e345e] pb-2">Notes & Verification</h4>
@@ -398,7 +445,7 @@ function ExchangeRatesModal({ rates, onClose, onUpdate }: any) {
                   <div className="flex items-center gap-2">
                     <input 
                       type="number" step="0.001" 
-                      value={newRate} onChange={e => setNewRate(e.target.value)}
+                      value={newRate} onChange={e => setNewRate(e.target.value.replace(/^0+(?=\d)/, ''))}
                       className="w-24 px-2 py-1 bg-[#061121] border border-emerald-500 rounded text-right text-emerald-400 focus:outline-none"
                     />
                     <button onClick={() => handleUpdate(rate.currencyCode)} disabled={loading} className="text-emerald-400 hover:text-emerald-300">
@@ -487,13 +534,13 @@ function InputSalesModal({ reconciliation, rates, onClose, onUpdate }: any) {
     try {
       const totalSalesUsd = salesItems.reduce((acc, curr) => acc + (curr.usdEquivalent || 0), 0);
       
-      const tDeductions = (Array.isArray(reconciliation.debtors) ? reconciliation.debtors.reduce((a:number,b:any)=>a+b.usdEquivalent,0) : reconciliation.debtors?.usdEquivalent || 0) +
-                          (Array.isArray(reconciliation.depositClaims) ? reconciliation.depositClaims.reduce((a:number,b:any)=>a+b.usdEquivalent,0) : reconciliation.depositClaims?.usdEquivalent || 0) +
-                          (Array.isArray(reconciliation.returnsRefunds) ? reconciliation.returnsRefunds.reduce((a:number,b:any)=>a+b.usdEquivalent,0) : reconciliation.returnsRefunds?.usdEquivalent || 0) +
-                          (Array.isArray(reconciliation.expenses) ? reconciliation.expenses.reduce((a:number,b:any)=>a+b.usdEquivalent,0) : reconciliation.expenses?.usdEquivalent || 0) +
-                          (Array.isArray(reconciliation.purchases) ? reconciliation.purchases.reduce((a:number,b:any)=>a+b.usdEquivalent,0) : reconciliation.purchases?.usdEquivalent || 0);
+      const tDeductions = (Array.isArray(reconciliation.debtors) ? reconciliation.debtors.reduce((a:number,b:any)=>a+(b.usdEquivalent||0),0) : reconciliation.debtors?.usdEquivalent || 0) +
+                          (Array.isArray(reconciliation.depositClaims) ? reconciliation.depositClaims.reduce((a:number,b:any)=>a+(b.usdEquivalent||0),0) : reconciliation.depositClaims?.usdEquivalent || 0) +
+                          (Array.isArray(reconciliation.returnsRefunds) ? reconciliation.returnsRefunds.reduce((a:number,b:any)=>a+(b.usdEquivalent||0),0) : reconciliation.returnsRefunds?.usdEquivalent || 0) +
+                          (Array.isArray(reconciliation.expenses) ? reconciliation.expenses.reduce((a:number,b:any)=>a+(b.usdEquivalent||0),0) : reconciliation.expenses?.usdEquivalent || 0) +
+                          (Array.isArray(reconciliation.purchases) ? reconciliation.purchases.reduce((a:number,b:any)=>a+(b.usdEquivalent||0),0) : reconciliation.purchases?.usdEquivalent || 0);
 
-      const totalDeposits = Array.isArray(reconciliation.depositsReceived) ? reconciliation.depositsReceived.reduce((a:number,b:any)=>a+b.usdEquivalent,0) : reconciliation.depositsReceived?.usdEquivalent || 0;
+      const totalDeposits = Array.isArray(reconciliation.depositsReceived) ? reconciliation.depositsReceived.reduce((a:number,b:any)=>a+(b.usdEquivalent||0),0) : reconciliation.depositsReceived?.usdEquivalent || 0;
 
       const expected = totalSalesUsd + totalDeposits - tDeductions;
       const actCash = reconciliation.endOfDayCash.usdEquivalent || 0;
@@ -543,9 +590,9 @@ function InputSalesModal({ reconciliation, rates, onClose, onUpdate }: any) {
               />
               <div className="flex gap-2 w-full sm:w-2/3">
                 <input 
-                  type="number" 
-                  value={item.amount || ''} 
-                  onChange={e => handleItemChange(idx, 'amount', parseFloat(e.target.value) || 0)}
+                  type="number" step="0.01" min="0"
+                  value={item.amount === 0 && item.description === '' ? '' : item.amount} 
+                  onChange={e => handleItemChange(idx, 'amount', e.target.value.replace(/^0+(?=\d)/, ''))}
                   className="w-full bg-[#061121] border border-[#1e345e] rounded-lg p-2 text-white text-sm text-right font-mono"
                   placeholder="Amount" 
                 />

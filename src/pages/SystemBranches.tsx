@@ -5,6 +5,8 @@ import { Building2, X, CheckCircle, Activity, Search, Target, MessageCircle, Ale
 import clsx from 'clsx';
 import { formatDistanceToNow, format } from 'date-fns';
 import { useAuth } from '../components/AuthProvider';
+import { ReconModal } from '../components/ReconModal';
+import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, Cell } from 'recharts';
 
 export function SystemBranches() {
   const { user: currentUser } = useAuth();
@@ -16,6 +18,7 @@ export function SystemBranches() {
   const [users, setUsers] = useState<User[]>([]);
   const [reconciliations, setReconciliations] = useState<DailyReconciliation[]>([]);
   const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
+  const [viewReconId, setViewReconId] = useState<string | null>(null);
 
   const [isAddingBranch, setIsAddingBranch] = useState(false);
   const [editForm, setEditForm] = useState<Partial<Branch>>({ active: true, tills: [], hasTills: false });
@@ -38,7 +41,18 @@ export function SystemBranches() {
   }, []);
 
   const getSupervisorsForBranch = (bId: string) => {
-    return users.filter(u => u.branchId === bId && u.role === 'SUPERVISOR');
+    const currentAssigned = users.filter(u => u.branchId === bId && u.role === 'SUPERVISOR');
+    const branchRecons = reconciliations.filter(r => r.branchId === bId);
+    const pastUserIds = Array.from(new Set(branchRecons.map(r => r.supervisorId)));
+    
+    const allRelated = [...currentAssigned];
+    pastUserIds.forEach(uid => {
+      if (uid && !allRelated.some(u => u.id === uid)) {
+        const u = users.find(x => x.id === uid);
+        if (u) allRelated.push(u);
+      }
+    });
+    return allRelated;
   };
 
   const handleSendAlert = async () => {
@@ -79,8 +93,8 @@ export function SystemBranches() {
     }
   };
 
-  const getCashUpsForSupervisor = (supId: string) => {
-    return reconciliations.filter(r => r.supervisorId === supId);
+  const getCashUpsForSupervisorAndBranch = (supId: string, bId: string) => {
+    return reconciliations.filter(r => r.supervisorId === supId && r.branchId === bId);
   };
 
   return (
@@ -90,7 +104,7 @@ export function SystemBranches() {
           <h1 className="text-3xl font-bold text-white tracking-tight">System Branches</h1>
           <p className="text-slate-400 mt-1">Select a branch to view supervisors and performance.</p>
         </div>
-        {(currentUser?.role === 'ADMIN' || currentUser?.role === 'DIRECTOR') && (
+        {currentUser?.role === 'ADMIN' && (
           <button 
             onClick={() => {
               setEditForm({ active: true, tills: [], hasTills: false });
@@ -218,7 +232,7 @@ export function SystemBranches() {
                   <h2 className="text-xl font-bold text-white">{selectedBranch.name} Dashboard</h2>
                   <p className="text-slate-400 text-sm mt-1">{selectedBranch.location}</p>
                 </div>
-                {(currentUser?.role === 'ADMIN' || currentUser?.role === 'DIRECTOR') && (
+                {currentUser?.role === 'ADMIN' && (
                   <button onClick={() => { setEditForm({...selectedBranch}); setIsAddingBranch(true); }} className="text-sm px-4 py-2 bg-[#112240] border border-[#1e345e] text-slate-300 rounded hover:text-white transition-colors">
                     Configure Branch
                   </button>
@@ -227,11 +241,21 @@ export function SystemBranches() {
               <div className="flex-1 overflow-y-auto p-6 space-y-8">
                 {getSupervisorsForBranch(selectedBranch.id).length === 0 ? (
                   <div className="text-center py-12 text-slate-500">
-                    No supervisors allocated to this branch.
+                    No supervisors or cash-up history for this branch.
                   </div>
                 ) : (
                   getSupervisorsForBranch(selectedBranch.id).map(sup => {
-                    const cashUps = getCashUpsForSupervisor(sup.id);
+                    const cashUps = getCashUpsForSupervisorAndBranch(sup.id, selectedBranch.id);
+                    const totalVariance = cashUps.reduce((acc, c) => acc + (c.varianceUsd || 0), 0);
+                    
+                    // Prepare graph data
+                    const chartData = [...cashUps]
+                      .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                      .map(c => ({
+                        date: format(new Date(c.date), 'MMM dd'),
+                        variance: c.varianceUsd || 0
+                      }));
+
                     return (
                       <div key={sup.id} className="bg-[#061121] border border-[#1e345e] rounded-xl overflow-hidden">
                         <div className="p-4 border-b border-[#1e345e] flex items-center justify-between bg-[#0a192f]">
@@ -243,16 +267,49 @@ export function SystemBranches() {
                               <div className="font-bold text-white flex items-center gap-2">
                                 {sup.name}
                                 <div className={clsx("w-2 h-2 rounded-full", sup.isOnline ? "bg-emerald-500 shadow-[0_0_8px_rgba(52,211,153,0.8)]" : "bg-slate-500")} title={sup.isOnline ? "Online" : "Offline"} />
+                                {sup.branchId !== selectedBranch.id && (
+                                  <span className="text-[10px] uppercase bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full ml-2">Past Assigned</span>
+                                )}
                               </div>
                               <div className="text-xs text-slate-400 mt-0.5">
                                 {sup.isOnline ? 'Online now' : (sup.lastSeen ? `Last seen ${formatDistanceToNow(new Date(sup.lastSeen))} ago` : 'Never logged in')}
                               </div>
                             </div>
                           </div>
-                          <div className="flex items-center gap-4 text-sm">
+                          
+                          <div className="flex-1 flex justify-center px-4 max-w-xs">
+                            {chartData.length > 0 && (
+                              <div className="w-full h-12 flex items-end">
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <BarChart data={chartData}>
+                                    <Tooltip
+                                      contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #1e345e', fontSize: '10px' }}
+                                      cursor={{ fill: '#1e345e', opacity: 0.4 }}
+                                      formatter={(value: number) => [`$${value.toFixed(2)}`, 'Variance']}
+                                      labelStyle={{ color: '#94a3b8' }}
+                                    />
+                                    <Bar dataKey="variance">
+                                      {chartData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={entry.variance > 0 ? '#34d399' : entry.variance < 0 ? '#fb7185' : '#60a5fa'} />
+                                      ))}
+                                    </Bar>
+                                  </BarChart>
+                                </ResponsiveContainer>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-4 text-sm whitespace-nowrap">
+                            <div className="text-right">
+                              <div className="text-slate-400 text-xs">Total Variances</div>
+                              <div className={clsx("font-bold text-sm", totalVariance > 0 ? "text-emerald-400" : totalVariance < 0 ? "text-rose-400" : "text-blue-400")}>
+                                {totalVariance > 0 ? '+' : ''}{totalVariance.toFixed(2)} USD
+                              </div>
+                            </div>
+                            <div className="border-l border-[#1e345e] h-8 mx-2" />
                             <div>
-                              <span className="text-slate-400">Total Cash-ups: </span>
-                              <span className="text-emerald-400 font-bold">{cashUps.length}</span>
+                              <span className="text-slate-400">Cash-ups: </span>
+                              <span className="text-white font-bold">{cashUps.length}</span>
                             </div>
                             <button 
                               onClick={() => setAlertTarget(sup)}
@@ -281,7 +338,7 @@ export function SystemBranches() {
                                   {cashUps.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(c => {
                                     const ts = Array.isArray(c.totalSales) ? c.totalSales.reduce((a,b)=>a+(b.usdEquivalent||0),0) : (c.totalSales?.usdEquivalent || 0);
                                     return (
-                                      <tr key={c.id} className="hover:bg-[#0a192f] transition-colors">
+                                      <tr key={c.id} onClick={() => setViewReconId(c.id)} className="hover:bg-[#112240] transition-colors cursor-pointer">
                                         <td className="px-4 py-3 font-mono text-slate-300">{format(new Date(c.date), 'MMM dd, yyyy')}</td>
                                         <td className="px-4 py-3 font-medium text-white">${ts.toFixed(2)}</td>
                                         <td className="px-4 py-3">
@@ -371,6 +428,13 @@ export function SystemBranches() {
             </div>
           </div>
         </div>
+      )}
+
+      {viewReconId && (
+        <ReconModal 
+          recon={reconciliations.find(r => r.id === viewReconId)}
+          onClose={() => setViewReconId(null)}
+        />
       )}
     </div>
   );

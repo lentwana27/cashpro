@@ -5,9 +5,14 @@ import * as schema from './schema.js';
 const { Pool } = pg;
 
 export const createPool = () => {
-  if (process.env.DATABASE_URL) {
+  let dbUrl = process.env.DATABASE_URL;
+  if (dbUrl && dbUrl.includes('db.kzhdpuvbitlhdzfnzrxf.supabase.co') && dbUrl.includes('[vIsionSibanda18$]')) {
+    dbUrl = 'postgresql://postgres.kzhdpuvbitlhdzfnzrxf:vIsionSibanda18%24@aws-0-eu-west-1.pooler.supabase.com:6543/postgres';
+  }
+
+  if (dbUrl) {
     return new Pool({
-      connectionString: process.env.DATABASE_URL,
+      connectionString: dbUrl,
       connectionTimeoutMillis: 15000,
     });
   }

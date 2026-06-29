@@ -8,6 +8,7 @@ import { format } from 'date-fns';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { ReconModal } from '../components/ReconModal';
 
 export function DirectorDashboard() {
   const [reconciliations, setReconciliations] = useState<DailyReconciliation[]>([]);
@@ -15,6 +16,10 @@ export function DirectorDashboard() {
   
   const [filterType, setFilterType] = useState('month'); // all, day, week, month, year
   const [filterValue, setFilterValue] = useState(format(new Date(), 'yyyy-MM'));
+  
+  const [selectedBranchFilter, setSelectedBranchFilter] = useState<string | null>(null);
+  const [viewReconId, setViewReconId] = useState<string | null>(null);
+  const tableRef = React.useRef<HTMLDivElement>(null);
   
   useEffect(() => {
     const load = async () => {
@@ -33,6 +38,28 @@ export function DirectorDashboard() {
     const interval = setInterval(load, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  const missingReconciliations = React.useMemo(() => {
+    const missing: { branchName: string; date: string }[] = [];
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    
+    branches.forEach(b => {
+      if (b.status !== 'ACTIVE') return;
+      for (let i = 1; i <= 7; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        const dStr = format(d, 'yyyy-MM-dd');
+        
+        const hasRecon = reconciliations.some(r => r.branchId === b.id && r.date === dStr);
+        if (!hasRecon) {
+          missing.push({ branchName: b.name || b.id, date: dStr });
+        }
+      }
+    });
+    
+    return missing.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [branches, reconciliations]);
 
   const getWeekStr = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -94,10 +121,10 @@ export function DirectorDashboard() {
   const top3Branches = branchAggregates.slice(0, 3);
   const underperformingBranches = [...branchAggregates].sort((a, b) => a.sales - b.sales).slice(0, 3);
   const highVarianceBranches = [...branchAggregates].sort((a, b) => b.shortageCount - a.shortageCount).filter(b => b.shortageCount > 0);
-
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   
-  const sortedReconciliations = [...filteredReconciliations].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const sortedReconciliations = [...filteredReconciliations]
+    .filter(r => !selectedBranchFilter || r.branchId === selectedBranchFilter)
+    .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const exportBranchDataToExcel = () => {
     // Sheet 1: Branch Aggregates
@@ -108,9 +135,9 @@ export function DirectorDashboard() {
         ba.branchId,
         b?.name || 'Unknown',
         b?.location || 'Unknown',
-        parseFloat(ba.sales.toFixed(2)),
-        parseFloat(ba.variance.toFixed(2)),
-        parseFloat(ba.expenses.toFixed(2))
+        parseFloat((ba.sales || 0).toFixed(2)),
+        parseFloat((ba.variance || 0).toFixed(2)),
+        parseFloat((ba.expenses || 0).toFixed(2))
       ];
     });
 
@@ -136,9 +163,9 @@ export function DirectorDashboard() {
       parseFloat(getSum(r.returnsRefunds).toFixed(2)),
       parseFloat(getSum(r.expenses).toFixed(2)),
       parseFloat(getSum(r.purchases).toFixed(2)),
-      parseFloat(r.expectedCashUsd.toFixed(2)),
-      parseFloat(r.endOfDayCash.usdEquivalent.toFixed(2)),
-      parseFloat(r.varianceUsd.toFixed(2)),
+      parseFloat((r.expectedCashUsd || 0).toFixed(2)),
+      parseFloat((r.endOfDayCash?.usdEquivalent || 0).toFixed(2)),
+      parseFloat((r.varianceUsd || 0).toFixed(2)),
       r.status
     ]);
 
@@ -168,9 +195,9 @@ export function DirectorDashboard() {
         ba.branchId,
         b?.name || 'Unknown',
         b?.location || 'Unknown',
-        `$${ba.sales.toFixed(2)}`,
-        `$${ba.variance.toFixed(2)}`,
-        `$${ba.expenses.toFixed(2)}`
+        `$${(ba.sales || 0).toFixed(2)}`,
+        `$${(ba.variance || 0).toFixed(2)}`,
+        `$${(ba.expenses || 0).toFixed(2)}`
       ];
     });
 
@@ -199,9 +226,9 @@ export function DirectorDashboard() {
       branches.find(b => b.id === r.branchId)?.name || r.branchId,
       r.date,
       `$${parseFloat(getSum(r.totalSales).toFixed(2))}`,
-      `$${parseFloat(r.expectedCashUsd.toFixed(2))}`,
-      `$${parseFloat(r.endOfDayCash.usdEquivalent.toFixed(2))}`,
-      `$${parseFloat(r.varianceUsd.toFixed(2))}`,
+      `$${parseFloat((r.expectedCashUsd || 0).toFixed(2))}`,
+      `$${parseFloat((r.endOfDayCash?.usdEquivalent || 0).toFixed(2))}`,
+      `$${parseFloat((r.varianceUsd || 0).toFixed(2))}`,
       r.status
     ]);
 
@@ -214,11 +241,39 @@ export function DirectorDashboard() {
     doc.save(`Director_Report_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
   };
 
+  const handleBranchClick = (branchId: string) => {
+    if (selectedBranchFilter === branchId) {
+      setSelectedBranchFilter(null);
+    } else {
+      setSelectedBranchFilter(branchId);
+      setTimeout(() => {
+        tableRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    }
+  };
+
+  const getBranchItemClass = (branchId: string) => {
+    return clsx(
+      "flex justify-between items-center p-2 rounded border cursor-pointer transition-colors",
+      selectedBranchFilter === branchId 
+        ? "bg-emerald-500/20 border-emerald-500/50 shadow-[0_0_10px_rgba(52,211,153,0.1)]" 
+        : "bg-[#112240] border-[#1e345e] hover:bg-[#1a365d]"
+    );
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <h1 className="text-3xl font-bold text-white tracking-tight">Executive Overview</h1>
         <div className="flex flex-col sm:flex-row items-center gap-3">
+          {selectedBranchFilter && (
+            <button 
+              onClick={() => setSelectedBranchFilter(null)}
+              className="text-xs px-3 py-1.5 bg-slate-800 text-slate-300 hover:text-white rounded border border-slate-700"
+            >
+              Clear Branch Filter
+            </button>
+          )}
           <div className="flex items-center gap-2 bg-[#061121] px-3 py-1.5 rounded-lg border border-[#1e345e]">
             <select 
               value={filterType} 
@@ -265,6 +320,29 @@ export function DirectorDashboard() {
         </div>
       </div>
 
+      {missingReconciliations.length > 0 && (
+        <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-6 shadow-inner">
+          <div className="flex items-center gap-3 mb-4">
+            <AlertCircle className="w-6 h-6 text-rose-400" />
+            <h3 className="text-lg font-bold text-rose-400">Action Required: Missing Submissions</h3>
+          </div>
+          <p className="text-sm text-rose-300 mb-4">The following branches have missed their daily reconciliations in the last 7 days.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+            {missingReconciliations.slice(0, 8).map((m, idx) => (
+              <div key={idx} className="bg-rose-500/5 p-3 rounded-lg border border-rose-500/10 flex justify-between items-center text-sm">
+                <span className="font-semibold text-rose-200 truncate pr-2">{m.branchName}</span>
+                <span className="text-rose-400/80 font-mono whitespace-nowrap">{format(new Date(m.date), 'MMM d, yyyy')}</span>
+              </div>
+            ))}
+            {missingReconciliations.length > 8 && (
+              <div className="bg-rose-500/5 p-3 rounded-lg border border-rose-500/10 flex justify-center items-center text-sm text-rose-300">
+                + {missingReconciliations.length - 8} more missing
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <KPICard title="Total Sales (USD)" value={`$${totalSales.toFixed(2)}`} icon={<DollarSign />} trend={filterType !== 'all' && filterValue ? 'Filtered' : '+12%'} positive />
         <KPICard title="Total Expenses (USD)" value={`$${totalExpenses.toFixed(2)}`} icon={<TrendingDown />} trend={filterType !== 'all' && filterValue ? 'Filtered' : '-3%'} />
@@ -280,9 +358,9 @@ export function DirectorDashboard() {
            <div className="space-y-3 relative z-10">
              {top3Branches.length === 0 && <div className="text-xs text-slate-500 italic">No data</div>}
              {top3Branches.map((b, i) => (
-               <div key={b.branchId} className="flex justify-between items-center bg-[#112240] p-2 rounded border border-[#1e345e]">
+               <div key={b.branchId} onClick={() => handleBranchClick(b.branchId)} className={getBranchItemClass(b.branchId)}>
                  <span className="text-sm font-medium text-slate-300">#{i+1} {b.name}</span>
-                 <span className="text-emerald-400 font-mono text-sm">${b.sales.toFixed(2)}</span>
+                 <span className="text-emerald-400 font-mono text-sm">${(b.sales || 0).toFixed(2)}</span>
                </div>
              ))}
            </div>
@@ -294,9 +372,9 @@ export function DirectorDashboard() {
            <div className="space-y-3 relative z-10">
              {underperformingBranches.length === 0 && <div className="text-xs text-slate-500 italic">No data</div>}
              {underperformingBranches.map((b, i) => (
-               <div key={b.branchId} className="flex justify-between items-center bg-[#112240] p-2 rounded border border-[#1e345e]">
+               <div key={b.branchId} onClick={() => handleBranchClick(b.branchId)} className={getBranchItemClass(b.branchId)}>
                  <span className="text-sm font-medium text-slate-300">{b.name}</span>
-                 <span className="text-slate-400 font-mono text-sm">${b.sales.toFixed(2)}</span>
+                 <span className="text-slate-400 font-mono text-sm">${(b.sales || 0).toFixed(2)}</span>
                </div>
              ))}
            </div>
@@ -308,7 +386,7 @@ export function DirectorDashboard() {
            <div className="space-y-3 relative z-10">
              {highVarianceBranches.length === 0 && <div className="text-xs text-slate-500 italic">No shortages recorded</div>}
              {highVarianceBranches.slice(0,3).map((b, i) => (
-               <div key={b.branchId} className="flex justify-between items-center bg-[#112240] p-2 rounded border border-[#1e345e]">
+               <div key={b.branchId} onClick={() => handleBranchClick(b.branchId)} className={getBranchItemClass(b.branchId)}>
                  <span className="text-sm font-medium text-slate-300">{b.name}</span>
                  <span className="text-rose-400 font-medium text-sm">{b.shortageCount} incidents</span>
                </div>
@@ -370,15 +448,15 @@ export function DirectorDashboard() {
               <tbody className="divide-y divide-[#1e345e]">
                 {branchAggregates.map((b, i) => (
                   <tr key={b.branchId} className="hover:bg-[#112240]/50 transition-colors">
-                    <td className="px-4 py-3 font-medium text-white">{b.branchId}</td>
+                    <td className="px-4 py-3 font-medium text-white">{b.name}</td>
                     <td className="px-4 py-3 text-right text-slate-400">#{i + 1}</td>
-                    <td className="px-4 py-3 text-right font-mono">${b.sales.toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right font-mono">${(b.sales || 0).toFixed(2)}</td>
                     <td className="px-4 py-3 text-right font-mono">
                       <span className={clsx(b.variance > 0 ? "text-emerald-400" : b.variance < 0 ? "text-rose-400" : "text-blue-400")}>
-                        {b.variance > 0 ? '+' : ''}{b.variance.toFixed(2)}
+                        {b.variance > 0 ? '+' : ''}{(b.variance || 0).toFixed(2)}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right font-mono">${b.expenses.toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right font-mono">${(b.expenses || 0).toFixed(2)}</td>
                   </tr>
                 ))}
                 {branchAggregates.length === 0 && (
@@ -393,7 +471,7 @@ export function DirectorDashboard() {
           </div>
         </div>
 
-        <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl p-6 shadow-xl lg:col-span-2">
+        <div ref={tableRef} className="bg-[#0a192f] border border-[#1e345e] rounded-xl p-6 shadow-xl lg:col-span-2">
           <h2 className="text-lg font-semibold text-white mb-6">Recent Cash-Up Submissions</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm whitespace-nowrap">
@@ -410,23 +488,20 @@ export function DirectorDashboard() {
               <tbody className="divide-y divide-[#1e345e]">
                 {sortedReconciliations.map(r => (
                   <React.Fragment key={r.id}>
-                    <tr className="hover:bg-[#112240]/50 transition-colors">
+                    <tr onClick={() => setViewReconId(r.id)} className="hover:bg-[#112240] transition-colors cursor-pointer group">
                       <td className="px-4 py-3">
-                        <button 
-                          onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
-                          className="p-1 rounded hover:bg-[#1e345e] transition-colors text-slate-400 hover:text-white"
-                        >
-                          {expandedId === r.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                        </button>
+                        <div className="p-1 rounded bg-[#0a192f] group-hover:bg-emerald-500/20 text-slate-500 group-hover:text-emerald-400 transition-colors flex items-center justify-center">
+                          <FileText className="w-4 h-4" />
+                        </div>
                       </td>
                       <td className="px-4 py-3 font-medium text-white">{branches.find(b => b.id === r.branchId)?.name || r.branchId}</td>
                       <td className="px-4 py-3 text-slate-300">{format(new Date(r.date), 'MMM d, yyyy')}</td>
-                      <td className="px-4 py-3 text-right font-mono">${(Array.isArray(r.totalSales) ? r.totalSales.reduce((a,b)=>a+b.usdEquivalent,0) : (r.totalSales?.usdEquivalent || 0)).toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right font-mono">${(Array.isArray(r.totalSales) ? r.totalSales.reduce((a,b)=>a+(b.usdEquivalent||0),0) : (r.totalSales?.usdEquivalent || 0)).toFixed(2)}</td>
                       <td className={clsx("px-4 py-3 text-right font-mono font-bold", 
-                        r.varianceUsd > 0 ? "text-emerald-400" :
-                        r.varianceUsd < 0 ? "text-rose-400" : "text-blue-400"
+                        (r.varianceUsd || 0) > 0 ? "text-emerald-400" :
+                        (r.varianceUsd || 0) < 0 ? "text-rose-400" : "text-blue-400"
                       )}>
-                        {r.varianceUsd > 0 ? '+' : ''}{r.varianceUsd.toFixed(2)}
+                        {(r.varianceUsd || 0) > 0 ? '+' : ''}{(r.varianceUsd || 0).toFixed(2)}
                       </td>
                       <td className="px-4 py-3 text-center">
                         <span className={clsx("px-2 py-1 rounded text-xs font-semibold", 
@@ -438,90 +513,6 @@ export function DirectorDashboard() {
                         </span>
                       </td>
                     </tr>
-                    {expandedId === r.id && (
-                      <tr className="bg-[#061121]/50 shadow-inner">
-                        <td colSpan={6} className="p-0 border-b border-[#1e345e]">
-                          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
-                            <div>
-                              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-[#1e345e] pb-2">Income breakdown</h4>
-                              <div className="space-y-4">
-                                <BreakdownSection title="Total Sales" items={r.totalSales} />
-                                <BreakdownSection title="Deposits Received" items={r.depositsReceived} />
-                              </div>
-                            </div>
-                            <div>
-                              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-[#1e345e] pb-2">Deductions breakdown</h4>
-                              <div className="space-y-4">
-                                <BreakdownSection title="Debtors" items={r.debtors} />
-                                <BreakdownSection title="Deposit Claims" items={r.depositClaims} />
-                                <BreakdownSection title="Returns / Refunds" items={r.returnsRefunds} />
-                                <BreakdownSection title="Expenses" items={r.expenses} />
-                                <BreakdownSection title="Purchases" items={r.purchases} />
-                              </div>
-                            </div>
-                            <div className="col-span-1 md:col-span-2 bg-[#0a192f] border border-[#1e345e] p-5 rounded-xl">
-                              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-[#1e345e] pb-2">Variance Breakdown</h4>
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 font-mono text-sm">
-                                <div>
-                                  <div className="text-slate-500 mb-1 text-xs uppercase tracking-wider">Expected Cash</div>
-                                  <div className="text-slate-300">${r.expectedCashUsd.toFixed(2)}</div>
-                                </div>
-                                <div>
-                                  <div className="text-slate-500 mb-1 text-xs uppercase tracking-wider">Physical Cash Count</div>
-                                  <div className="text-white font-bold">${r.endOfDayCash.usdEquivalent.toFixed(2)}</div>
-                                  {r.tillCashBreakdown && r.tillCashBreakdown.length > 0 && (
-                                    <div className="mt-2 space-y-1 text-xs border-l-2 border-[#1e345e] pl-2 font-sans">
-                                      {r.tillCashBreakdown.map((t: any, i: number) => (
-                                         <div key={i} className="flex justify-between text-slate-400">
-                                            <span>
-                                               {t.description}
-                                               {t.cashierName && <span className="text-blue-400 ml-1">({t.cashierName})</span>}
-                                            </span>
-                                            <span className="font-mono">${(t.usdEquivalent||0).toFixed(2)}</span>
-                                         </div>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                                <div>
-                                  <div className="text-slate-500 mb-1 text-xs uppercase tracking-wider">Variance</div>
-                                  <div className={clsx("text-lg font-bold", r.varianceUsd > 0 ? "text-emerald-400" : r.varianceUsd < 0 ? "text-rose-400" : "text-blue-400")}>
-                                    {r.varianceUsd > 0 ? '+' : ''}{r.varianceUsd.toFixed(2)}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          {(r.notes || r.signature || (r.amendmentNotes && r.amendmentNotes.length > 0)) && (
-                            <div className="px-6 pb-6 mt-2">
-                              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-[#1e345e] pb-2">Notes & Verification</h4>
-                              {r.amendmentNotes && r.amendmentNotes.length > 0 && (
-                                <div className="mb-4 space-y-2">
-                                  <p className="text-xs text-slate-500 mb-1">Amendment History</p>
-                                  {r.amendmentNotes.map((note: string, i: number) => (
-                                    <div key={i} className="text-sm text-yellow-500/90 bg-yellow-500/10 p-3 rounded-lg border border-yellow-500/20 leading-relaxed font-medium">
-                                      {note}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                              {r.notes && (
-                                <div className="mb-4">
-                                  <p className="text-xs text-slate-500 mb-1">Additional Notes</p>
-                                  <p className="text-sm text-slate-300 bg-[#061121] p-3 rounded-lg border border-[#1e345e] whitespace-pre-wrap">{r.notes}</p>
-                                </div>
-                              )}
-                              {r.signature && (
-                                <div>
-                                  <p className="text-xs text-slate-500 mb-1">Digitally Signed By</p>
-                                  <p className="text-lg text-emerald-400 font-serif italic">{r.signature}</p>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    )}
                   </React.Fragment>
                 ))}
               </tbody>
@@ -529,6 +520,12 @@ export function DirectorDashboard() {
           </div>
         </div>
       </div>
+      {viewReconId && (
+        <ReconModal 
+          recon={reconciliations.find(r => r.id === viewReconId)}
+          onClose={() => setViewReconId(null)}
+        />
+      )}
     </div>
   );
 }

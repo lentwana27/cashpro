@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from '../components/AuthProvider';
 import { api } from '../lib/api';
 import { ExchangeRate, DailyReconciliation, ReconLineItem } from '../lib/types';
@@ -97,9 +97,54 @@ export function SupervisorDashboard() {
     setQlAmount('');
   };
 
-  const missingSalesRecs = history.filter(r => !r.salesConfirmed && r.date !== todayStr);
+  const missingSalesRecs = history.filter(r => !r.salesConfirmed && r.date !== todayStr && r.status !== 'UNLOCK_REQUESTED' && r.status !== 'UNLOCK_APPROVED');
   const currentMissingSales = submitted && !submitted.salesConfirmed;
   const preventNewCashUp = !submitted && missingSalesRecs.length > 0;
+  
+  const completelyMissingDates = useMemo(() => {
+    if (!history) return [];
+    const missing = [];
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    for (let i = 1; i <= 7; i++) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const dStr = format(d, 'yyyy-MM-dd');
+      if (!history.some(r => r.date === dStr)) {
+        missing.push(dStr);
+      }
+    }
+    return missing;
+  }, [history]);
+
+  const requestUnlock = async (dStr: string) => {
+    try {
+      await api.post('/reconciliations', {
+        branchId: user?.branchId,
+        supervisorId: user?.id,
+        date: dStr,
+        status: 'UNLOCK_REQUESTED',
+        expectedCashUsd: 0,
+        varianceUsd: 0,
+        totalSales: [],
+        depositsReceived: [],
+        debtors: [],
+        depositClaims: [],
+        returnsRefunds: [],
+        expenses: [],
+        purchases: [],
+        endOfDayCash: null,
+        tillCashBreakdown: [],
+        salesConfirmed: false
+      });
+      loadData();
+    } catch (e) {
+      console.error('Failed to request unlock', e);
+    }
+  };
+
+  const unlockRequestedRecs = history.filter(r => r.status === 'UNLOCK_REQUESTED');
+  const unlockApprovedRecs = history.filter(r => r.status === 'UNLOCK_APPROVED');
   
   const [isEnteringSalesFor, setIsEnteringSalesFor] = useState<DailyReconciliation | null>(null);
 
@@ -126,7 +171,29 @@ export function SupervisorDashboard() {
            onCancel={() => setIsEnteringSalesFor(null)} 
            onSuccess={() => { setIsEnteringSalesFor(null); loadData(); }} 
         />
-      ) : submitted && !isEditing ? (
+      ) : completelyMissingDates.includes(date) && date !== todayStr ? (
+        <div className="bg-[#0a192f] border border-rose-500/50 shadow-2xl rounded-2xl p-8 text-center ring-1 ring-inset ring-rose-500/10">
+          <div className="mx-auto w-16 h-16 bg-rose-500/20 rounded-full flex items-center justify-center mb-4 border border-rose-500/50">
+            <AlertCircle className="w-8 h-8 text-rose-400" />
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-2">Missing Reconciliation</h2>
+          <p className="text-slate-400 mb-8">You skipped the daily cash-up for {format(new Date(date), 'MMMM do, yyyy')}. You must request permission from the accountant to unlock this date.</p>
+          <button 
+            onClick={() => requestUnlock(date)}
+            className="px-8 py-3 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl shadow-lg transition-colors"
+          >
+            Request Unlock
+          </button>
+        </div>
+      ) : submitted && submitted.status === 'UNLOCK_REQUESTED' ? (
+        <div className="bg-[#0a192f] border border-amber-500/50 shadow-2xl rounded-2xl p-8 text-center ring-1 ring-inset ring-amber-500/10">
+          <div className="mx-auto w-16 h-16 bg-amber-500/20 rounded-full flex items-center justify-center mb-4 border border-amber-500/50">
+            <RotateCcw className="w-8 h-8 text-amber-400" animate-spin />
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-2">Unlock Requested</h2>
+          <p className="text-slate-400 mb-8">Your request to unlock {format(new Date(date), 'MMMM do, yyyy')} is pending approval from the accountant.</p>
+        </div>
+      ) : (submitted && !isEditing && submitted.status !== 'UNLOCK_APPROVED') ? (
         <div className="bg-[#0a192f] border border-[#1e345e] shadow-2xl rounded-2xl p-8 text-center ring-1 ring-inset ring-emerald-500/10">
           <div className="mx-auto w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mb-4 border border-emerald-500/50">
             <CheckCircle2 className="w-8 h-8 text-emerald-400" />
@@ -148,12 +215,12 @@ export function SupervisorDashboard() {
           )}
 
           <div className="bg-[#061121] rounded-xl p-6 text-left border border-[#1e345e] shadow-inner font-mono text-sm mb-6">
-            <div className="flex justify-between mb-2"><span className="text-slate-500">Physical Cash:</span> <span className="text-white">${submitted.endOfDayCash.usdEquivalent.toFixed(2)}</span></div>
-            <div className="flex justify-between mb-2"><span className="text-slate-500">Expected Cash:</span> <span className="text-white">${submitted.expectedCashUsd.toFixed(2)}</span></div>
+            <div className="flex justify-between mb-2"><span className="text-slate-500">Physical Cash:</span> <span className="text-white">${(submitted.endOfDayCash?.usdEquivalent || 0).toFixed(2)}</span></div>
+            <div className="flex justify-between mb-2"><span className="text-slate-500">Expected Cash:</span> <span className="text-white">${(submitted.expectedCashUsd || 0).toFixed(2)}</span></div>
             <div className="border-t border-[#1e345e] my-2 pt-2 flex justify-between">
               <span className="text-slate-500">Variance:</span> 
               <span className={clsx("font-bold", submitted.varianceUsd > 0 ? "text-emerald-400" : submitted.varianceUsd < 0 ? "text-rose-400" : "text-blue-400")}>
-                ${submitted.varianceUsd.toFixed(2)}
+                ${(submitted.varianceUsd || 0).toFixed(2)}
               </span>
             </div>
           </div>
@@ -201,10 +268,10 @@ export function SupervisorDashboard() {
           supervisorId={user.id} 
           date={date} 
           rates={rates} 
-          existingData={isEditing ? submitted : null}
+          existingData={isEditing || submitted?.status === 'UNLOCK_APPROVED' ? submitted : null}
           quickLogs={quickLogs}
           onClearLogs={() => setQuickLogs([])}
-          onCancel={isEditing ? handleCancelEdit : () => setIsCashUpMode(false)}
+          onCancel={isEditing || submitted?.status === 'UNLOCK_APPROVED' ? handleCancelEdit : () => setIsCashUpMode(false)}
           onSuccess={() => { setIsEditing(false); setIsCashUpMode(false); loadData(); }} 
         />
       ) : (
@@ -213,16 +280,25 @@ export function SupervisorDashboard() {
              <div className="w-16 h-16 bg-[#112240] rounded-full flex items-center justify-center mb-4 border border-[#1e345e]">
                 <Activity className="w-8 h-8 text-emerald-400" />
              </div>
-             <h2 className="text-2xl font-bold text-white mb-2">Shift Open</h2>
-             <p className="text-slate-400 mb-6 max-w-sm text-sm">When your shift is over, proceed to the daily cash-up to reconcile all records.</p>
+             <h2 className="text-2xl font-bold text-white mb-2">
+               {submitted?.status === 'UNLOCK_APPROVED' ? 'Unlock Approved' : 'Shift Open'}
+             </h2>
+             <p className="text-slate-400 mb-6 max-w-sm text-sm">
+               {submitted?.status === 'UNLOCK_APPROVED' 
+                 ? 'You can now enter the cash-up for this unlocked date.' 
+                 : 'When your shift is over, proceed to the daily cash-up to reconcile all records.'}
+             </p>
              {preventNewCashUp ? (
                <div className="bg-rose-500/10 border border-rose-500/20 p-4 rounded-xl text-rose-400 text-sm mb-4">
                  <AlertCircle className="w-6 h-6 mx-auto mb-2" />
                  You cannot start a new cash-up until you have entered the system sales for previous cash-ups. Please review your Submission History below.
                </div>
              ) : (
-               <button onClick={() => setIsCashUpMode(true)} className="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-medium rounded-xl shadow-lg transition-colors w-full max-w-xs">
-                  Start End-of-Day Cash-Up
+               <button onClick={() => {
+                 if (submitted?.status === 'UNLOCK_APPROVED') setIsEditing(true);
+                 setIsCashUpMode(true);
+               }} className="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-medium rounded-xl shadow-lg transition-colors w-full max-w-xs">
+                  {submitted?.status === 'UNLOCK_APPROVED' ? 'Fill Missing Cash-Up' : 'Start End-of-Day Cash-Up'}
                </button>
              )}
            </div>
@@ -243,7 +319,7 @@ export function SupervisorDashboard() {
                        <div className="text-slate-500 text-xs mt-0.5">{log.amount} {log.currencyCode}</div>
                      </div>
                      <div className="flex items-center gap-3">
-                        <div className="text-emerald-400 font-mono text-sm">${log.usdEquivalent.toFixed(2)}</div>
+                        <div className="text-emerald-400 font-mono text-sm">${(item.usdEquivalent || 0).toFixed(2)}</div>
                         <button onClick={() => setQuickLogs(quickLogs.filter((_, i) => i !== idx))} className="text-slate-600 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity p-1"><Trash2 className="w-3.5 h-3.5" /></button>
                      </div>
                    </div>
@@ -281,14 +357,14 @@ export function SupervisorDashboard() {
                 <tr key={r.id} className="hover:bg-[#112240]/50 transition-colors">
                   <td className="px-6 py-4 font-medium text-white">{format(new Date(r.date), 'MMM d, yyyy')}</td>
                   <td className="px-6 py-4 text-right text-slate-300">
-                    ${(Array.isArray(r.totalSales) ? r.totalSales.reduce((a:number,b:any)=>a+b.usdEquivalent,0) : (r.totalSales?.usdEquivalent || 0)).toFixed(2)}
+                    ${(Array.isArray(r.totalSales) ? r.totalSales.reduce((a:number,b:any)=>a+(b.usdEquivalent||0),0) : (r.totalSales?.usdEquivalent || 0)).toFixed(2)}
                   </td>
-                  <td className="px-6 py-4 text-right text-slate-300">${r.endOfDayCash.usdEquivalent.toFixed(2)}</td>
+                  <td className="px-6 py-4 text-right text-slate-300">${(r.endOfDayCash?.usdEquivalent || 0).toFixed(2)}</td>
                   <td className={clsx("px-6 py-4 text-right font-bold", 
                     r.varianceUsd > 0 ? "text-emerald-400" :
                     r.varianceUsd < 0 ? "text-rose-400" : "text-blue-400"
                   )}>
-                    {r.varianceUsd > 0 ? '+' : ''}{r.varianceUsd.toFixed(2)}
+                    {r.varianceUsd > 0 ? '+' : ''}{(r.varianceUsd || 0).toFixed(2)}
                   </td>
                   <td className="px-6 py-4 text-center">
                     <div className="flex flex-col items-center justify-center gap-1">
@@ -342,11 +418,11 @@ export function SupervisorDashboard() {
                </div>
                <div>
                  <label className="block text-xs font-medium text-slate-400 mb-1">Description</label>
-                 <input type="text" value={qlDesc} onChange={e => setQlDesc(e.target.value)} placeholder="E.g. Paid debtor invoice" className="w-full bg-[#061121] border border-[#1e345e] rounded-lg p-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" />
+                 <input type="text" value={qlDesc} onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }} onChange={e => setQlDesc(e.target.value)} placeholder="E.g. Paid debtor invoice" className="w-full bg-[#061121] border border-[#1e345e] rounded-lg p-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" />
                </div>
                <div>
                  <label className="block text-xs font-medium text-slate-400 mb-1">Invoice Number (Optional)</label>
-                 <input type="text" value={qlInvoice} onChange={e => setQlInvoice(e.target.value)} placeholder="E.g. INV-2023-001" className="w-full bg-[#061121] border border-[#1e345e] rounded-lg p-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" />
+                 <input type="text" value={qlInvoice} onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }} onChange={e => setQlInvoice(e.target.value)} placeholder="E.g. INV-2023-001" className="w-full bg-[#061121] border border-[#1e345e] rounded-lg p-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500" />
                </div>
                <div>
                  <label className="block text-xs font-medium text-slate-400 mb-1">Amount</label>
@@ -354,7 +430,7 @@ export function SupervisorDashboard() {
                    <select value={qlCurr} onChange={e => setQlCurr(e.target.value)} className="bg-[#061121] px-2 py-2 text-emerald-400 border-r border-[#1e345e] focus:outline-none text-sm">
                      {rates.map(r => <option key={r.currencyCode} value={r.currencyCode}>{r.currencyCode}</option>)}
                    </select>
-                   <input type="number" step="0.01" min="0" value={qlAmount} onChange={e => setQlAmount(e.target.value)} className="flex-1 bg-[#061121] px-3 py-2 text-white text-sm focus:outline-none" placeholder="0.00" />
+                   <input type="number" step="0.01" min="0" value={qlAmount} onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }} onChange={e => setQlAmount(e.target.value.replace(/^0+(?=\d)/, ''))} className="flex-1 bg-[#061121] px-3 py-2 text-white text-sm focus:outline-none" placeholder="0.00" />
                  </div>
                </div>
             </div>
@@ -414,7 +490,12 @@ function CashUpForm({ branch, branchId, supervisorId, date, rates, existingData,
   const [signature, setSignature] = useState(existingData?.signature || '');
   const [showPreview, setShowPreview] = useState(false);
 
+  const [hasInitialized, setHasInitialized] = useState(false);
+  const prevIdRef = useRef<string | undefined>(undefined);
+  
   useEffect(() => {
+    if (hasInitialized && existingData?.id === prevIdRef.current) return;
+
     if (existingData) {
       setSales(ensureArray(existingData.totalSales, tillNames));
       setDeposits(ensureArray(existingData.depositsReceived, ['Deposits Received']));
@@ -426,6 +507,8 @@ function CashUpForm({ branch, branchId, supervisorId, date, rates, existingData,
       setCashBreakdown(existingData.tillCashBreakdown || ensureArray(undefined, cashTillNames));
       setNotes(existingData.notes || '');
       setSignature(existingData.signature || '');
+      prevIdRef.current = existingData.id;
+      setHasInitialized(true);
     } else {
       const getLogs = (cat: string) => quickLogs.filter((l: any) => l.category === cat);
       
@@ -453,8 +536,10 @@ function CashUpForm({ branch, branchId, supervisorId, date, rates, existingData,
       setCashBreakdown(ensureArray(undefined, cashTillNames));
       setNotes('');
       setSignature('');
+      prevIdRef.current = undefined;
+      setHasInitialized(true);
     }
-  }, [existingData, quickLogs, branch]);
+  }, [existingData?.id, hasInitialized]);
 
   const getUsd = (amount: number, code: string) => {
     const rate = rates.find((r: any) => r.currencyCode === code)?.rateToUsd || 1;
@@ -468,7 +553,7 @@ function CashUpForm({ branch, branchId, supervisorId, date, rates, existingData,
     } else {
       updated.usdEquivalent = getUsd(parseFloat(item.amount as string) || 0, updated.currencyCode);
     }
-    setter(updated);
+    setter((prev: any[]) => prev.map(p => p.id === item.id ? updated : p));
   };
 
   const getSum = (arr: any) => {
@@ -653,22 +738,7 @@ function CashUpForm({ branch, branchId, supervisorId, date, rates, existingData,
             <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2"><Activity className="text-blue-400 w-5 h-5"/> Physical Cash Count</h2>
           </div>
           <div className="p-6 space-y-4">
-            {cashBreakdown.map((cashItem, index) => (
-               <ReconField showCashierName={true} key={index} label={cashItem.description} item={cashItem} setter={(newVal: any) => {
-                 const upd = [...cashBreakdown];
-                 upd[index] = newVal;
-                 setCashBreakdown(upd);
-               }} currencies={currencies} onChange={(setterFn: any, itm: any, fld: string, val: any) => {
-                 const parsedVal = fld === 'amount' ? (val === '' ? 0 : parseFloat(val)) : val;
-                 const upd = { ...itm, [fld]: parsedVal };
-                 if (fld === 'amount' || fld === 'currencyCode') {
-                    const amt = fld === 'amount' ? (val === '' ? 0 : parseFloat(val)) : parseFloat(itm.amount as string);
-                    const code = fld === 'currencyCode' ? val : itm.currencyCode;
-                    upd.usdEquivalent = getUsd(amt || 0, code);
-                 }
-                 setterFn(upd);
-               }} />
-            ))}
+            <ReconListField title="Physical Cash Breakdown" items={cashBreakdown} setItems={setCashBreakdown} currencies={currencies} getUsd={getUsd} showCashierName={true} />
           </div>
       </div>
 
@@ -859,7 +929,8 @@ function ReconField({ label, item, setter, currencies, onChange, showCashierName
             <input 
               type="number" step="0.01" min="0"
               value={item.amount === 0 ? '' : item.amount}
-              onChange={e => onChange(setter, item, 'amount', e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }}
+              onChange={e => onChange(setter, item, 'amount', e.target.value.replace(/^0+(?=\d)/, ''))}
               className="flex-1 bg-[#061121] px-4 py-2 text-white focus:outline-none"
               placeholder="0.00"
             />
@@ -867,7 +938,7 @@ function ReconField({ label, item, setter, currencies, onChange, showCashierName
         </div>
         <div className="w-full sm:w-32 bg-[#061121] border border-[#1e345e] px-4 py-2 rounded-lg flex items-center justify-between text-sm h-10 shadow-inner">
           <span className="text-slate-500">USD</span>
-          <span className="text-emerald-400 font-medium">${item.usdEquivalent.toFixed(2)}</span>
+          <span className="text-emerald-400 font-medium">${(item.usdEquivalent || 0).toFixed(2)}</span>
         </div>
       </div>
       {showCashierName && (
@@ -876,6 +947,7 @@ function ReconField({ label, item, setter, currencies, onChange, showCashierName
             type="text" 
             placeholder="Cashier Name"
             value={item.cashierName || ''}
+            onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }}
             onChange={e => onChange(setter, item, 'cashierName', e.target.value)}
             className="w-full bg-[#061121] border border-[#1e345e] px-4 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 rounded-lg"
           />
@@ -885,7 +957,7 @@ function ReconField({ label, item, setter, currencies, onChange, showCashierName
   );
 }
 
-function ReconListField({ title, items, setItems, currencies, getUsd }: any) {
+function ReconListField({ title, items, setItems, currencies, getUsd, showCashierName }: any) {
   const createItem = (desc: string) => ({ id: Math.random().toString(), description: desc, amount: 0, currencyCode: 'USD', usdEquivalent: 0 });
   
   return (
@@ -901,16 +973,23 @@ function ReconListField({ title, items, setItems, currencies, getUsd }: any) {
         {items.map((item: any, idx: number) => (
           <div key={item.id || idx} className="flex flex-col sm:flex-row gap-4 items-end bg-[#112240] p-4 rounded-xl border border-[#1e345e]">
             <div className="flex-1 w-full">
-              <input type="text" value={item.description} onChange={e => {
+              <input type="text" value={item.description} onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }} onChange={e => {
                 const newArr = [...items];
                 newArr[idx].description = e.target.value;
                 setItems(newArr);
               }} placeholder="Description..." className="w-full bg-transparent text-sm text-white focus:outline-none mb-1 font-medium" />
-              <input type="text" value={item.invoiceNumber || ''} onChange={e => {
+              <input type="text" value={item.invoiceNumber || ''} onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }} onChange={e => {
                 const newArr = [...items];
                 newArr[idx].invoiceNumber = e.target.value;
                 setItems(newArr);
               }} placeholder="Invoice # (Optional)..." className="w-full bg-transparent text-xs text-slate-400 focus:outline-none mb-2" />
+              {showCashierName && (
+                <input type="text" value={item.cashierName || ''} onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }} onChange={e => {
+                  const newArr = [...items];
+                  newArr[idx].cashierName = e.target.value;
+                  setItems(newArr);
+                }} placeholder="Cashier Name (Optional)..." className="w-full bg-transparent text-xs text-blue-300 focus:outline-none mb-2" />
+              )}
               <div className="flex rounded-lg shadow-sm border border-[#1e345e] overflow-hidden focus-within:ring-2 focus-within:ring-emerald-500/50">
                 <select value={item.currencyCode} onChange={e => {
                   const newArr = [...items];
@@ -920,12 +999,11 @@ function ReconListField({ title, items, setItems, currencies, getUsd }: any) {
                 }} className="bg-[#061121] py-2 px-3 text-emerald-400 border-r border-[#1e345e] focus:outline-none">
                   {currencies.map((c: string) => <option key={c} value={c}>{c}</option>)}
                 </select>
-                <input type="number" step="0.01" min="0" value={item.amount === 0 && item.description === '' ? '' : item.amount} onChange={e => {
+                <input type="number" step="0.01" min="0" value={item.amount === 0 && item.description === '' ? '' : item.amount} onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }} onChange={e => {
                   const newArr = [...items];
-                  const rawVal = e.target.value;
-                  const val = rawVal === '' ? 0 : parseFloat(rawVal);
-                  newArr[idx].amount = val;
-                  newArr[idx].usdEquivalent = getUsd(val, newArr[idx].currencyCode);
+                  const rawVal = e.target.value.replace(/^0+(?=\d)/, '');
+                  newArr[idx].amount = rawVal;
+                  newArr[idx].usdEquivalent = getUsd(parseFloat(rawVal) || 0, newArr[idx].currencyCode);
                   setItems(newArr);
                 }} className="flex-1 bg-[#061121] px-4 py-2 text-white focus:outline-none" placeholder="0.00" />
               </div>
@@ -933,7 +1011,7 @@ function ReconListField({ title, items, setItems, currencies, getUsd }: any) {
             <div className="flex items-center gap-4">
               <div className="w-full sm:w-32 bg-[#061121] border border-[#1e345e] px-4 py-2 rounded-lg flex items-center justify-between text-sm h-10 shadow-inner">
                 <span className="text-slate-500">USD</span>
-                <span className="text-emerald-400 font-medium">${item.usdEquivalent.toFixed(2)}</span>
+                <span className="text-emerald-400 font-medium">${(item.usdEquivalent || 0).toFixed(2)}</span>
               </div>
               <button type="button" onClick={() => setItems(items.filter((_: any, i: number) => i !== idx))} className="h-10 px-3 text-rose-500 hover:text-rose-400 p-2">
                  <Trash2 className="w-4 h-4"/>
@@ -942,14 +1020,14 @@ function ReconListField({ title, items, setItems, currencies, getUsd }: any) {
           </div>
         ))}
       </div>
-      {items.length > 0 && <div className="text-right text-sm text-slate-400 mt-2 px-2 border-t border-[#1e345e] pt-2">Total {title}: <span className="text-white font-mono text-base">${items.reduce((a:any,b:any)=>a+b.usdEquivalent,0).toFixed(2)}</span></div>}
+      {items.length > 0 && <div className="text-right text-sm text-slate-400 mt-2 px-2 border-t border-[#1e345e] pt-2">Total {title}: <span className="text-white font-mono text-base">${items.reduce((a:any,b:any)=>a+(b.usdEquivalent||0),0).toFixed(2)}</span></div>}
     </div>
   );
 }
 
 function PreviewList({ title, items }: { title: string, items: any[] }) {
   if (!items || items.length === 0) return null;
-  const total = items.reduce((a,b)=>a+b.usdEquivalent, 0);
+  const total = items.reduce((a,b)=>a+(b.usdEquivalent||0), 0);
   if (total === 0 && items.length === 1 && !items[0].description) return null; // hide if just 1 zero item
   const validItems = items.filter(i => i.amount > 0 || i.description);
   if (validItems.length === 0) return null;
@@ -969,7 +1047,7 @@ function PreviewList({ title, items }: { title: string, items: any[] }) {
                {item.invoiceNumber && <span className="text-slate-500 font-normal ml-1"> (Inv: {item.invoiceNumber})</span>}
                {(item.amount > 0 || item.amount === '0') && <span className="text-slate-500 ml-1"> [{item.amount} {item.currencyCode}]</span>}
              </span>
-             <span className="text-white font-mono">${item.usdEquivalent.toFixed(2)}</span>
+             <span className="text-white font-mono">${(item.usdEquivalent || 0).toFixed(2)}</span>
            </div>
          ))}
        </div>

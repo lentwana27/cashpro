@@ -1,9 +1,11 @@
 import express from 'express';
+import 'express-async-errors';
 import cors from 'cors';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { createServer as createViteServer } from 'vite';
 import compression from 'compression';
+import 'dotenv/config';
 
 import { db } from './src/db/index.js';
 import * as schema from './src/db/schema.js';
@@ -68,7 +70,7 @@ api.post('/auth/signup', async (req, res) => {
     role: role || 'SUPERVISOR',
     branchId: branchId || null,
     active: true,
-    createdAt: new Date().toISOString()
+    createdAt: new Date()
   };
   await db.insert(schema.users).values(user);
   res.json(user);
@@ -80,7 +82,7 @@ api.post('/auth/login', async (req, res) => {
   const user = users[0];
   if (user && user.passwordHash === password) {
     await db.update(schema.users).set({ isOnline: true, lastSeen: new Date().toISOString() }).where(eq(schema.users.id, user.id));
-    res.json(user);
+    res.json({ user, token: 'fake-jwt-token-replace-later' });
   } else {
     res.status(401).json({ error: 'Invalid credentials' });
   }
@@ -169,11 +171,20 @@ api.get('/users', async (req, res) => {
 });
 api.post('/users', async (req, res) => {
   const user = { ...req.body, id: uuidv4(), active: true };
+  if (user.createdAt) {
+    user.createdAt = new Date(user.createdAt);
+  } else {
+    user.createdAt = new Date();
+  }
   await db.insert(schema.users).values(user);
   res.json(user);
 });
 api.put('/users/:id', async (req, res) => {
-  await db.update(schema.users).set(req.body).where(eq(schema.users.id, req.params.id));
+  const data = { ...req.body };
+  if (data.createdAt) {
+    delete data.createdAt; // Prevent overriding createdAt incorrectly
+  }
+  await db.update(schema.users).set(data).where(eq(schema.users.id, req.params.id));
   res.json({ success: true });
 });
 api.put('/users/:id/approve', async (req, res) => {
@@ -259,6 +270,15 @@ api.use((req, res) => {
 });
 
 app.use('/api', api);
+
+app.use((err: any, req: any, res: any, next: any) => {
+  console.error('Global Error Handler:', err);
+  if (req.path.startsWith('/api')) {
+    res.status(500).json({ error: 'Internal Server Error: Database connection failed or invalid query.' });
+  } else {
+    next(err);
+  }
+});
 
 // ==========================================
 // STARTUP + VITE MIDDLEWARE
