@@ -6,8 +6,8 @@ import { v4 as uuidv4 } from 'uuid';
 import compression from 'compression';
 import 'dotenv/config';
 
-import { db } from './src/db/index.js';
-import * as schema from './src/db/schema.js';
+import { db } from './src/db/index';
+import * as schema from './src/db/schema';
 import { eq, desc, or } from 'drizzle-orm';
 
 const app = express();
@@ -77,6 +77,9 @@ api.post('/auth/signup', async (req, res) => {
 
 api.post('/auth/login', async (req, res) => {
   const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Missing email or password' });
+  }
   const users = await db.select().from(schema.users).where(eq(schema.users.email, email));
   const user = users[0];
   if (user && user.passwordHash === password) {

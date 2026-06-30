@@ -1,11 +1,11 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
-import * as schema from './schema.js';
+import * as schema from './schema';
 
 const { Pool } = pg;
 
 export const createPool = () => {
-  let dbUrl = process.env.DATABASE_URL;
+  let dbUrl = process.env.DATABASE_URL || 'postgresql://postgres.kzhdpuvbitlhdzfnzrxf:vIsionSibanda18%24@aws-0-eu-west-1.pooler.supabase.com:6543/postgres';
   if (dbUrl && dbUrl.includes('db.kzhdpuvbitlhdzfnzrxf.supabase.co')) {
     // Force use of IPv4 pooler for Supabase on Vercel
     dbUrl = 'postgresql://postgres.kzhdpuvbitlhdzfnzrxf:vIsionSibanda18%24@aws-0-eu-west-1.pooler.supabase.com:6543/postgres';
