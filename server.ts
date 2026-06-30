@@ -3,7 +3,6 @@ import 'express-async-errors';
 import cors from 'cors';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { createServer as createViteServer } from 'vite';
 import compression from 'compression';
 import 'dotenv/config';
 
@@ -285,6 +284,7 @@ app.use((err: any, req: any, res: any, next: any) => {
 // ==========================================
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
