@@ -119,7 +119,7 @@ export function SystemBranches() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1 border border-[#1e345e] bg-[#0a192f] rounded-xl shadow-xl flex flex-col h-[700px]">
+        <div className="lg:col-span-1 border border-[#1e345e] bg-[#0a192f] rounded-xl shadow-xl flex flex-col min-h-[500px] lg:h-[700px]">
           <div className="p-4 border-b border-[#1e345e] bg-[#061121] rounded-t-xl">
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
               <Building2 className="w-5 h-5 text-emerald-400" /> All Branches
@@ -149,7 +149,7 @@ export function SystemBranches() {
           </div>
         </div>
 
-        <div className="lg:col-span-2 border border-[#1e345e] bg-[#0a192f] rounded-xl shadow-xl flex flex-col h-[700px]">
+        <div className="lg:col-span-2 border border-[#1e345e] bg-[#0a192f] rounded-xl shadow-xl flex flex-col min-h-[500px] lg:h-[700px]">
           {isAddingBranch || (selectedBranch && editForm.id === selectedBranch.id) ? (
             <div className="flex-1 flex flex-col overflow-hidden">
               <div className="p-6 border-b border-[#1e345e] flex items-center justify-between">
@@ -258,17 +258,17 @@ export function SystemBranches() {
 
                     return (
                       <div key={sup.id} className="bg-[#061121] border border-[#1e345e] rounded-xl overflow-hidden">
-                        <div className="p-4 border-b border-[#1e345e] flex items-center justify-between bg-[#0a192f]">
+                        <div className="p-4 border-b border-[#1e345e] flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-[#0a192f]">
                           <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-full bg-[#112240] border border-[#1e345e] flex items-center justify-center text-white font-bold">
+                            <div className="w-10 h-10 rounded-full shrink-0 bg-[#112240] border border-[#1e345e] flex items-center justify-center text-white font-bold">
                               {sup.name.charAt(0)}
                             </div>
                             <div>
-                              <div className="font-bold text-white flex items-center gap-2">
+                              <div className="font-bold text-white flex flex-wrap items-center gap-2">
                                 {sup.name}
                                 <div className={clsx("w-2 h-2 rounded-full", sup.isOnline ? "bg-emerald-500 shadow-[0_0_8px_rgba(52,211,153,0.8)]" : "bg-slate-500")} title={sup.isOnline ? "Online" : "Offline"} />
                                 {sup.branchId !== selectedBranch.id && (
-                                  <span className="text-[10px] uppercase bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full ml-2">Past Assigned</span>
+                                  <span className="text-[10px] uppercase bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full">Past Assigned</span>
                                 )}
                               </div>
                               <div className="text-xs text-slate-400 mt-0.5">
@@ -277,9 +277,9 @@ export function SystemBranches() {
                             </div>
                           </div>
                           
-                          <div className="flex-1 flex justify-center px-4 max-w-xs">
+                          <div className="flex-1 flex justify-start lg:justify-center px-0 lg:px-4 w-full lg:max-w-xs h-16 lg:h-12">
                             {chartData.length > 0 && (
-                              <div className="w-full h-12 flex items-end">
+                              <div className="w-full h-full flex items-end">
                                 <ResponsiveContainer width="100%" height="100%">
                                   <BarChart data={chartData}>
                                     <Tooltip
@@ -299,7 +299,7 @@ export function SystemBranches() {
                             )}
                           </div>
 
-                          <div className="flex items-center gap-4 text-sm whitespace-nowrap">
+                          <div className="flex flex-wrap sm:flex-nowrap items-center gap-4 text-sm whitespace-nowrap">
                             <div className="text-right">
                               <div className="text-slate-400 text-xs">Total Variances</div>
                               <div className={clsx("font-bold text-sm", totalVariance > 0 ? "text-emerald-400" : totalVariance < 0 ? "text-rose-400" : "text-blue-400")}>

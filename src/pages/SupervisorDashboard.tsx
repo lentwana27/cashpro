@@ -971,7 +971,7 @@ function ReconListField({ title, items, setItems, currencies, getUsd, showCashie
       <div className="space-y-3">
         {items.length === 0 && <div className="text-sm text-slate-500 italic p-3 bg-[#061121] rounded-xl border border-[#1e345e]">No records.</div>}
         {items.map((item: any, idx: number) => (
-          <div key={item.id || idx} className="flex flex-col sm:flex-row gap-4 items-end bg-[#112240] p-4 rounded-xl border border-[#1e345e]">
+          <div key={item.id || idx} className="flex flex-col sm:flex-row gap-4 sm:items-end bg-[#112240] p-4 rounded-xl border border-[#1e345e]">
             <div className="flex-1 w-full">
               <input type="text" value={item.description} onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }} onChange={e => {
                 const newArr = [...items];
