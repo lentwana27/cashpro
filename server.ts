@@ -6,8 +6,8 @@ import { v4 as uuidv4 } from 'uuid';
 import compression from 'compression';
 import 'dotenv/config';
 
-import { db } from './src/db/index';
-import * as schema from './src/db/schema';
+import { db } from './src/db/index.js';
+import * as schema from './src/db/schema.js';
 import { eq, desc, or } from 'drizzle-orm';
 
 const app = express();
