@@ -31,7 +31,7 @@ export function DirectorDashboard() {
          setReconciliations(recs);
          setBranches(brs);
       } catch (e) {
-         console.error(e);
+         // Ignore network errors during polling
       }
     };
     load();
@@ -321,7 +321,7 @@ export function DirectorDashboard() {
       </div>
 
       {missingReconciliations.length > 0 && (
-        <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-6 shadow-inner">
+        <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 sm:p-6 shadow-inner">
           <div className="flex items-center gap-3 mb-4">
             <AlertCircle className="w-6 h-6 text-rose-400" />
             <h3 className="text-lg font-bold text-rose-400">Action Required: Missing Submissions</h3>
@@ -352,7 +352,7 @@ export function DirectorDashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl p-6 shadow-xl relative overflow-hidden">
+        <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl p-4 sm:p-6 shadow-xl relative overflow-hidden">
            <div className="absolute top-0 right-0 p-4 opacity-5"><TrendingUp className="w-24 h-24 text-emerald-400"/></div>
            <h3 className="text-lg font-bold text-white mb-4 relative z-10 flex items-center gap-2">Top 3 Performing (Sales)</h3>
            <div className="space-y-3 relative z-10">
@@ -366,7 +366,7 @@ export function DirectorDashboard() {
            </div>
         </div>
 
-        <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl p-6 shadow-xl relative overflow-hidden">
+        <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl p-4 sm:p-6 shadow-xl relative overflow-hidden">
            <div className="absolute top-0 right-0 p-4 opacity-5"><TrendingDown className="w-24 h-24 text-slate-400"/></div>
            <h3 className="text-lg font-bold text-white mb-4 relative z-10 flex items-center gap-2">Low Sales</h3>
            <div className="space-y-3 relative z-10">
@@ -380,7 +380,7 @@ export function DirectorDashboard() {
            </div>
         </div>
 
-        <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl p-6 shadow-xl relative overflow-hidden">
+        <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl p-4 sm:p-6 shadow-xl relative overflow-hidden">
            <div className="absolute top-0 right-0 p-4 opacity-5"><AlertCircle className="w-24 h-24 text-rose-400"/></div>
            <h3 className="text-lg font-bold text-white mb-4 relative z-10 flex items-center gap-2">High Variance Incidents</h3>
            <div className="space-y-3 relative z-10">
@@ -396,7 +396,7 @@ export function DirectorDashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl p-6 shadow-xl w-full">
+        <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl p-4 sm:p-6 shadow-xl w-full">
           <h2 className="text-lg font-semibold text-white mb-6">Sales Trend</h2>
           <div className="w-full">
             <ResponsiveContainer width="100%" height={300}>
@@ -417,7 +417,7 @@ export function DirectorDashboard() {
           </div>
         </div>
 
-        <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl p-6 shadow-xl w-full">
+        <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl p-4 sm:p-6 shadow-xl w-full">
           <h2 className="text-lg font-semibold text-white mb-6">Variance Tracking</h2>
           <div className="w-full">
             <ResponsiveContainer width="100%" height={300}>
@@ -432,7 +432,7 @@ export function DirectorDashboard() {
           </div>
         </div>
 
-        <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl p-6 shadow-xl lg:col-span-2">
+        <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl p-4 sm:p-6 shadow-xl lg:col-span-2">
           <h2 className="text-lg font-semibold text-white mb-6">Branch Performance Comparison</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm whitespace-nowrap">
@@ -471,7 +471,7 @@ export function DirectorDashboard() {
           </div>
         </div>
 
-        <div ref={tableRef} className="bg-[#0a192f] border border-[#1e345e] rounded-xl p-6 shadow-xl lg:col-span-2">
+        <div ref={tableRef} className="bg-[#0a192f] border border-[#1e345e] rounded-xl p-4 sm:p-6 shadow-xl lg:col-span-2">
           <h2 className="text-lg font-semibold text-white mb-6">Recent Cash-Up Submissions</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm whitespace-nowrap">
@@ -532,7 +532,7 @@ export function DirectorDashboard() {
 
 function KPICard({ title, value, icon, trend, positive, valueColor = 'text-white' }: any) {
   return (
-    <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl p-6 relative overflow-hidden group hover:border-[#2a457e] shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_8px_20px_rgba(0,0,0,0.5)] transition-all transform hover:-translate-y-1 hover:shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_12px_24px_rgba(52,211,153,0.1)]">
+    <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl p-4 sm:p-6 relative overflow-hidden group hover:border-[#2a457e] shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_8px_20px_rgba(0,0,0,0.5)] transition-all transform hover:-translate-y-1 hover:shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_12px_24px_rgba(52,211,153,0.1)]">
       <div className="absolute -right-6 -top-6 w-24 h-24 bg-gradient-to-br from-[#1e345e]/50 to-transparent rounded-full pointer-events-none group-hover:scale-110 transition-transform" />
       <div className="flex justify-between items-start mb-4">
         <h3 className="text-sm font-medium text-slate-400 capitalize">{title}</h3>

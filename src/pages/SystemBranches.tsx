@@ -99,7 +99,7 @@ export function SystemBranches() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white tracking-tight">System Branches</h1>
           <p className="text-slate-400 mt-1">Select a branch to view supervisors and performance.</p>
@@ -152,7 +152,7 @@ export function SystemBranches() {
         <div className="lg:col-span-2 border border-[#1e345e] bg-[#0a192f] rounded-xl shadow-xl flex flex-col min-h-[500px] lg:h-[700px]">
           {isAddingBranch || (selectedBranch && editForm.id === selectedBranch.id) ? (
             <div className="flex-1 flex flex-col overflow-hidden">
-              <div className="p-6 border-b border-[#1e345e] flex items-center justify-between">
+              <div className="p-4 sm:p-6 border-b border-[#1e345e] flex items-center justify-between">
                 <h2 className="text-xl font-bold text-white">
                   {editForm.id ? 'Edit Branch Options' : 'Register New Branch'}
                 </h2>
@@ -160,8 +160,8 @@ export function SystemBranches() {
                   <X className="w-5 h-5" />
                 </button>
               </div>
-              <div className="p-6 overflow-y-auto space-y-6 flex-1">
-                <div className="grid grid-cols-2 gap-4">
+              <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-medium text-slate-400 mb-1">Branch Name</label>
                     <input type="text" value={editForm.name || ''} onChange={e => setEditForm({...editForm, name: e.target.value})} className="w-full bg-[#061121] border border-[#1e345e] text-white p-2 rounded focus:outline-none focus:border-emerald-500" />
@@ -227,7 +227,7 @@ export function SystemBranches() {
             </div>
           ) : selectedBranch ? (
             <>
-              <div className="p-6 border-b border-[#1e345e] bg-[#061121] rounded-t-xl flex justify-between items-center">
+              <div className="p-4 sm:p-6 border-b border-[#1e345e] bg-[#061121] rounded-t-xl flex justify-between items-center">
                 <div>
                   <h2 className="text-xl font-bold text-white">{selectedBranch.name} Dashboard</h2>
                   <p className="text-slate-400 text-sm mt-1">{selectedBranch.location}</p>
@@ -238,7 +238,7 @@ export function SystemBranches() {
                   </button>
                 )}
               </div>
-              <div className="flex-1 overflow-y-auto p-6 space-y-8">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-8">
                 {getSupervisorsForBranch(selectedBranch.id).length === 0 ? (
                   <div className="text-center py-12 text-slate-500">
                     No supervisors or cash-up history for this branch.
@@ -371,7 +371,7 @@ export function SystemBranches() {
               </div>
             </>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-slate-500 h-full p-6 text-center">
+            <div className="flex-1 flex flex-col items-center justify-center text-slate-500 h-full p-4 sm:p-6 text-center">
               <Building2 className="w-16 h-16 opacity-30 mb-4" />
               <p>Select a branch to view its supervisors and their posted cash-ups.</p>
             </div>
@@ -381,7 +381,7 @@ export function SystemBranches() {
 
       {alertTarget && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-[#0a192f] border border-blue-500/30 rounded-xl shadow-[0_0_50px_rgba(59,130,246,0.1)] p-6 w-full max-w-md relative overflow-hidden">
+          <div className="bg-[#0a192f] border border-blue-500/30 rounded-xl shadow-[0_0_50px_rgba(59,130,246,0.1)] p-4 sm:p-6 w-full max-w-md relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-emerald-500" />
             
             <div className="flex items-center justify-between mb-6">

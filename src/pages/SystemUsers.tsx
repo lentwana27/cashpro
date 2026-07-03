@@ -26,7 +26,7 @@ export function SystemUsers() {
       // Admin might want to see themselves too, or maybe just others
       setUsers(usrs.filter((u: User) => u.id !== currentUser?.id));
     } catch(e) {
-      console.error(e);
+      // Ignore network errors during polling
     }
   };
 
@@ -63,7 +63,7 @@ export function SystemUsers() {
       </div>
 
       <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl shadow-xl overflow-hidden">
-        <div className="p-6 border-b border-[#1e345e] bg-[#061121]">
+        <div className="p-4 sm:p-6 border-b border-[#1e345e] bg-[#061121]">
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
             <Users className="w-5 h-5 text-blue-400" /> User Directory
           </h2>
@@ -133,7 +133,7 @@ export function SystemUsers() {
 
       {alertTarget && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-[#0a192f] border border-rose-500/30 rounded-xl shadow-[0_0_50px_rgba(244,63,94,0.1)] p-6 w-full max-w-md relative overflow-hidden">
+          <div className="bg-[#0a192f] border border-rose-500/30 rounded-xl shadow-[0_0_50px_rgba(244,63,94,0.1)] p-4 sm:p-6 w-full max-w-md relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-rose-500 to-orange-500" />
             
             <div className="flex items-center justify-between mb-6">

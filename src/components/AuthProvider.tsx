@@ -11,16 +11,23 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-
-  useEffect(() => {
+  const [user, setUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('cashup_session');
     if (saved) {
-      const { user, token } = JSON.parse(saved);
-      setUser(user);
-      setToken(token);
+      try { return JSON.parse(saved).user; } catch (e) { return null; }
     }
+    return null;
+  });
+  const [token, setToken] = useState<string | null>(() => {
+    const saved = localStorage.getItem('cashup_session');
+    if (saved) {
+      try { return JSON.parse(saved).token; } catch (e) { return null; }
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    // Session is already initialized in useState, we can optionally listen for storage events here if needed across tabs
   }, []);
 
   useEffect(() => {
@@ -29,7 +36,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ userId: user.id })
-    }).catch(console.error);
+    }).catch(() => { /* silent */ });
     ping();
     const interval = setInterval(ping, 30000); // 30s heartbeat
     return () => clearInterval(interval);

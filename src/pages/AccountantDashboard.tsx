@@ -30,14 +30,18 @@ export function AccountantDashboard() {
   }, []);
 
   const loadData = async () => {
-    const [recs, rts, brs] = await Promise.all([
-      api.get('/reconciliations'),
-      api.get('/rates'),
-      api.get('/branches')
-    ]);
-    setReconciliations(recs);
-    setRates(rts);
-    setBranches(brs);
+    try {
+      const [recs, rts, brs] = await Promise.all([
+        api.get('/reconciliations'),
+        api.get('/rates'),
+        api.get('/branches')
+      ]);
+      setReconciliations(recs);
+      setRates(rts);
+      setBranches(brs);
+    } catch (e) {
+      // Ignore network errors during polling
+    }
   };
 
   const updateStatus = async (id: string, status: string) => {
@@ -158,7 +162,7 @@ export function AccountantDashboard() {
       </div>
 
       {missingReconciliations.length > 0 && (
-        <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-6 shadow-inner">
+        <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 sm:p-6 shadow-inner">
           <div className="flex items-center gap-3 mb-4">
             <AlertOctagon className="w-6 h-6 text-rose-400" />
             <h3 className="text-lg font-bold text-rose-400">Missing Reconciliations Alert</h3>
@@ -310,7 +314,7 @@ export function AccountantDashboard() {
                         className="bg-[#061121]/50 shadow-inner"
                       >
                         <td colSpan={8} className="p-0 border-b border-[#1e345e]">
-                          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
+                          <div className="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
                             <div>
                               <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-[#1e345e] pb-2">Income breakdown</h4>
                               <div className="space-y-4">
@@ -377,7 +381,7 @@ export function AccountantDashboard() {
             </tbody>
           </table>
           {filteredRecon.length === 0 && (
-            <div className="p-8 text-center text-slate-500">
+            <div className="p-4 sm:p-6 md:p-8 text-center text-slate-500">
               No reconciliations found matching filters.
             </div>
           )}
@@ -423,11 +427,11 @@ function ExchangeRatesModal({ rates, onClose, onUpdate }: any) {
         initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
         className="bg-[#0a192f] border border-[#1e345e] rounded-2xl w-full max-w-md overflow-hidden shadow-2xl"
       >
-        <div className="p-6 border-b border-[#1e345e] flex justify-between items-center">
+        <div className="p-4 sm:p-6 border-b border-[#1e345e] flex justify-between items-center">
           <h2 className="text-xl font-bold text-white">Exchange Rates</h2>
           <button onClick={onClose} className="text-slate-500 hover:text-white">&times;</button>
         </div>
-        <div className="p-6 space-y-4">
+        <div className="p-4 sm:p-6 space-y-4">
           <p className="text-sm text-slate-400 mb-4">Base currency is USD (1.00). Rate modifications apply to FUTURE submissions only.</p>
           {rates.filter((r: any) => r.currencyCode !== 'USD').map((rate: ExchangeRate) => (
             <div key={rate.id} className="flex items-center justify-between bg-[#112240] p-4 rounded-xl border border-[#1e345e] shadow-sm">
@@ -574,7 +578,7 @@ function InputSalesModal({ reconciliation, rates, onClose, onUpdate }: any) {
           <button onClick={onClose} className="text-slate-400 hover:text-white">&times;</button>
         </div>
         
-        <div className="p-6 max-h-[60vh] overflow-y-auto space-y-4">
+        <div className="p-4 sm:p-6 max-h-[60vh] overflow-y-auto space-y-4">
           <div className="bg-[#061121] p-3 rounded-lg border border-emerald-500/20 text-emerald-400 text-sm mb-4">
             Inputting total sales for reconciliation on <strong>{reconciliation.date}</strong>.
           </div>

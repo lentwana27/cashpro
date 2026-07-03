@@ -32,16 +32,20 @@ export function AdminDashboard() {
   }, []);
 
   const loadData = async () => {
-    const [usrs, brs, recs, lgs] = await Promise.all([
-      api.get('/users'),
-      api.get('/branches'),
-      api.get('/reconciliations'),
-      api.get('/logs').catch(() => [])
-    ]);
-    setUsers(usrs.filter((u: User) => u.role !== 'ADMIN'));
-    setBranches(brs);
-    setReconciliations(recs);
-    setLogs(lgs.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+    try {
+      const [usrs, brs, recs, lgs] = await Promise.all([
+        api.get('/users'),
+        api.get('/branches'),
+        api.get('/reconciliations'),
+        api.get('/logs').catch(() => [])
+      ]);
+      setUsers(usrs.filter((u: User) => u.role !== 'ADMIN'));
+      setBranches(brs);
+      setReconciliations(recs);
+      setLogs(lgs.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+    } catch (e) {
+      // Ignore network errors during polling
+    }
   };
 
   const unlockSales = async (id: string) => {
@@ -152,7 +156,7 @@ export function AdminDashboard() {
         
         {/* USERS PANEL */}
         <div id="users" className="bg-[#0a192f] border border-[#1e345e] rounded-xl shadow-xl flex flex-col h-[600px]">
-          <div className="p-6 border-b border-[#1e345e] flex items-center gap-3">
+          <div className="p-4 sm:p-6 border-b border-[#1e345e] flex items-center gap-3">
             <Users className="text-emerald-400 w-5 h-5" />
             <h2 className="text-xl font-bold text-white">User Access Management</h2>
           </div>
@@ -205,7 +209,7 @@ export function AdminDashboard() {
 
         {/* BRANCHES PANEL */}
         <div id="branches" className="bg-[#0a192f] border border-[#1e345e] rounded-xl shadow-xl flex flex-col h-[600px]">
-           <div className="p-6 border-b border-[#1e345e] flex items-center justify-between">
+           <div className="p-4 sm:p-6 border-b border-[#1e345e] flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Building2 className="text-blue-400 w-5 h-5" />
               <h2 className="text-xl font-bold text-white">Branch Directory ({branches.length})</h2>
@@ -240,7 +244,7 @@ export function AdminDashboard() {
 
       </div>
 
-      <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl shadow-xl flex flex-col p-6">
+      <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl shadow-xl flex flex-col p-4 sm:p-6">
         <div className="flex items-center gap-3 mb-4">
           <ShieldCheck className="text-rose-400 w-5 h-5" />
           <h2 className="text-xl font-bold text-white">Locked Sales Records</h2>
@@ -274,7 +278,7 @@ export function AdminDashboard() {
         </div>
       </div>
 
-      <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl shadow-xl flex flex-col p-6">
+      <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl shadow-xl flex flex-col p-4 sm:p-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
           <div className="flex items-center gap-3">
             <Activity className="text-emerald-400 w-5 h-5" />
@@ -331,7 +335,7 @@ export function AdminDashboard() {
       {/* EDIT BRANCH MODAL */}
       {editingBranch && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl shadow-2xl p-6 w-full max-w-md">
+          <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl shadow-2xl p-4 sm:p-6 w-full max-w-md">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-bold text-white">Edit Branch: {editingBranch.code}</h3>
               <button onClick={() => setEditingBranch(null)} className="text-slate-400 hover:text-white">
@@ -415,7 +419,7 @@ export function AdminDashboard() {
       {/* CREATE BRANCH MODAL */}
       {isCreatingBranch && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl shadow-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+          <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl shadow-2xl p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-bold text-white">Create New Branch</h3>
               <button onClick={() => setIsCreatingBranch(false)} className="text-slate-400 hover:text-white">
@@ -511,7 +515,7 @@ export function AdminDashboard() {
       {/* EDIT USER MODAL */}
       {editingUser && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl shadow-2xl p-6 w-full max-w-md">
+          <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl shadow-2xl p-4 sm:p-6 w-full max-w-md">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-bold text-white">Edit User: {editingUser.name}</h3>
               <button onClick={() => setEditingUser(null)} className="text-slate-400 hover:text-white">

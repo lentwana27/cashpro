@@ -36,7 +36,7 @@ export function ChatWidget() {
 
         setMessages(msgRes);
       } catch (e) {
-        console.error(e);
+        // Ignore network errors during polling
       }
     };
     
@@ -84,7 +84,7 @@ export function ChatWidget() {
     <>
       <button 
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 w-14 h-14 bg-[#112240] hover:bg-[#1a2d53] border border-[#1e345e] text-emerald-400 rounded-full shadow-2xl flex items-center justify-center transition-transform hover:scale-110 z-40"
+        className="fixed bottom-6 right-4 sm:right-6 w-14 h-14 bg-[#112240] hover:bg-[#1a2d53] border border-[#1e345e] text-emerald-400 rounded-full shadow-2xl flex items-center justify-center transition-transform hover:scale-110 z-40"
       >
         <MessageCircle className="w-6 h-6" />
         {hasUnread && (
@@ -98,7 +98,7 @@ export function ChatWidget() {
             initial={{ opacity: 0, y: 50, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 50, scale: 0.95 }}
-            className="fixed bottom-24 right-6 w-[400px] h-[600px] bg-[#0a192f] border border-[#1e345e] shadow-2xl rounded-2xl flex overflow-hidden z-50 flex-col md:flex-row"
+            className="fixed bottom-24 right-4 sm:right-6 w-[calc(100vw-2rem)] sm:w-[700px] h-[600px] max-h-[calc(100vh-8rem)] bg-[#0a192f] border border-[#1e345e] shadow-2xl rounded-2xl flex overflow-hidden z-50 flex-col md:flex-row"
           >
             {/* Thread List */}
             <div className={clsx("w-full md:w-1/3 bg-[#061121] border-r border-[#1e345e] flex flex-col", activeUser && "hidden md:flex")}>

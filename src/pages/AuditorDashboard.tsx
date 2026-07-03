@@ -24,7 +24,7 @@ export function AuditorDashboard() {
       setReconciliations(recons);
       setBranches(brs);
     } catch (e) {
-      console.error('Failed to load auditor data:', e);
+      // Ignore network errors during polling
     }
   };
 
@@ -105,13 +105,13 @@ export function AuditorDashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl p-6 shadow-xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-6 opacity-10"><ShieldAlert className="w-16 h-16" /></div>
+        <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl p-4 sm:p-6 shadow-xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-4 sm:p-6 opacity-10"><ShieldAlert className="w-16 h-16" /></div>
           <div className="text-sm font-bold text-slate-400 mb-2 uppercase tracking-wider">Total Reconciliations</div>
           <div className="text-4xl font-black text-white">{reconciliations.length}</div>
         </div>
-        <div className="bg-[#0a192f] border border-rose-500/20 rounded-xl p-6 shadow-[0_0_15px_rgba(244,63,94,0.05)] relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-6 opacity-10 text-rose-500"><AlertTriangle className="w-16 h-16" /></div>
+        <div className="bg-[#0a192f] border border-rose-500/20 rounded-xl p-4 sm:p-6 shadow-[0_0_15px_rgba(244,63,94,0.05)] relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-4 sm:p-6 opacity-10 text-rose-500"><AlertTriangle className="w-16 h-16" /></div>
           <div className="text-sm font-bold text-rose-400 mb-2 uppercase tracking-wider">Flagged & High Risk</div>
           <div className="text-4xl font-black text-white">{flaggedCashUps.length}</div>
         </div>
@@ -193,7 +193,7 @@ export function AuditorDashboard() {
                   {expandedId === r.id && (
                     <tr>
                       <td colSpan={8} className="p-0 border-b border-[#1e345e]">
-                        <div className="bg-[#061121] p-6 shadow-inner border-y border-[#0a192f]">
+                        <div className="bg-[#061121] p-4 sm:p-6 shadow-inner border-y border-[#0a192f]">
                           <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
                             <PreviewSection title="Income" items={[
                               { label: 'Total Sales', value: getSum(r.totalSales) },

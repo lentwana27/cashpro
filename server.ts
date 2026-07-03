@@ -275,7 +275,7 @@ app.use('/api', api);
 
 app.use((err: any, req: any, res: any, next: any) => {
   console.error('Global Error Handler:', err);
-  if (req.path.startsWith('/api')) {
+  if (req.originalUrl.startsWith('/api')) {
     res.status(500).json({ error: 'Internal Server Error: Database connection failed or invalid query.' });
   } else {
     next(err);

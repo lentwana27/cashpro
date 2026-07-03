@@ -40,7 +40,7 @@ export function Login() {
         animate={{ opacity: 1, scale: 1, y: 0 }}
         className="w-full max-w-md relative z-10"
       >
-        <div className="bg-[#0a192f] border border-[#1e345e] rounded-2xl shadow-2xl p-8 backdrop-blur-xl bg-opacity-80">
+        <div className="bg-[#0a192f] border border-[#1e345e] rounded-2xl shadow-2xl p-4 sm:p-6 md:p-8 backdrop-blur-xl bg-opacity-80">
           <div className="flex flex-col items-center mb-8">
             <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-500/30 mb-6">
               <Activity className="text-white w-8 h-8" />

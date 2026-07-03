@@ -45,7 +45,7 @@ export function Signup() {
         animate={{ opacity: 1, scale: 1, y: 0 }}
         className="w-full max-w-md relative z-10"
       >
-        <div className="bg-[#0a192f] border border-[#1e345e] rounded-2xl shadow-2xl p-8 backdrop-blur-xl bg-opacity-80">
+        <div className="bg-[#0a192f] border border-[#1e345e] rounded-2xl shadow-2xl p-4 sm:p-6 md:p-8 backdrop-blur-xl bg-opacity-80">
           <div className="flex flex-col items-center mb-8">
             <h1 className="text-3xl font-bold text-white tracking-tight">Request Access</h1>
             <p className="text-slate-400 mt-2 text-center text-sm">Join the CashUp Pro platform</p>

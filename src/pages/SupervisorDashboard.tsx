@@ -76,7 +76,7 @@ export function SupervisorDashboard() {
       if (todayRec) setSubmitted(todayRec);
       else setSubmitted(null);
     } catch (e) {
-      console.error(e);
+      // Ignore network errors during polling
     }
   };
 
@@ -188,7 +188,7 @@ export function SupervisorDashboard() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-[#0a192f] rounded-xl p-6 border border-[#1e345e] shadow-lg gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-[#0a192f] rounded-xl p-4 sm:p-6 border border-[#1e345e] shadow-lg gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white tracking-tight">
             Daily Cash-Up
@@ -222,7 +222,7 @@ export function SupervisorDashboard() {
           }}
         />
       ) : completelyMissingDates.includes(date) && date !== todayStr ? (
-        <div className="bg-[#0a192f] border border-rose-500/50 shadow-2xl rounded-2xl p-8 text-center ring-1 ring-inset ring-rose-500/10">
+        <div className="bg-[#0a192f] border border-rose-500/50 shadow-2xl rounded-2xl p-4 sm:p-6 md:p-8 text-center ring-1 ring-inset ring-rose-500/10">
           <div className="mx-auto w-16 h-16 bg-rose-500/20 rounded-full flex items-center justify-center mb-4 border border-rose-500/50">
             <AlertCircle className="w-8 h-8 text-rose-400" />
           </div>
@@ -242,7 +242,7 @@ export function SupervisorDashboard() {
           </button>
         </div>
       ) : submitted && submitted.status === "UNLOCK_REQUESTED" ? (
-        <div className="bg-[#0a192f] border border-amber-500/50 shadow-2xl rounded-2xl p-8 text-center ring-1 ring-inset ring-amber-500/10">
+        <div className="bg-[#0a192f] border border-amber-500/50 shadow-2xl rounded-2xl p-4 sm:p-6 md:p-8 text-center ring-1 ring-inset ring-amber-500/10">
           <div className="mx-auto w-16 h-16 bg-amber-500/20 rounded-full flex items-center justify-center mb-4 border border-amber-500/50">
             <RotateCcw className="w-8 h-8 text-amber-400" animate-spin />
           </div>
@@ -255,7 +255,7 @@ export function SupervisorDashboard() {
           </p>
         </div>
       ) : submitted && !isEditing && submitted.status !== "UNLOCK_APPROVED" ? (
-        <div className="bg-[#0a192f] border border-[#1e345e] shadow-2xl rounded-2xl p-8 text-center ring-1 ring-inset ring-emerald-500/10">
+        <div className="bg-[#0a192f] border border-[#1e345e] shadow-2xl rounded-2xl p-4 sm:p-6 md:p-8 text-center ring-1 ring-inset ring-emerald-500/10">
           <div className="mx-auto w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mb-4 border border-emerald-500/50">
             <CheckCircle2 className="w-8 h-8 text-emerald-400" />
           </div>
@@ -273,7 +273,7 @@ export function SupervisorDashboard() {
           </p>
 
           {currentMissingSales && (
-            <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-6 mb-8 mt-4 shadow-inner max-w-sm mx-auto">
+            <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 sm:p-6 mb-8 mt-4 shadow-inner max-w-sm mx-auto">
               <h3 className="text-lg font-bold text-blue-400 mb-2">
                 Action Required
               </h3>
@@ -290,7 +290,7 @@ export function SupervisorDashboard() {
             </div>
           )}
 
-          <div className="bg-[#061121] rounded-xl p-6 text-left border border-[#1e345e] shadow-inner font-mono text-sm mb-6">
+          <div className="bg-[#061121] rounded-xl p-4 sm:p-6 text-left border border-[#1e345e] shadow-inner font-mono text-sm mb-6">
             <div className="flex justify-between mb-2">
               <span className="text-slate-500">Physical Cash:</span>{" "}
               <span className="text-white">
@@ -321,7 +321,7 @@ export function SupervisorDashboard() {
           </div>
 
           {submitted.amendmentNotes && submitted.amendmentNotes.length > 0 && (
-            <div className="bg-[#061121] rounded-xl p-6 mb-6 text-left border border-[#1e345e]">
+            <div className="bg-[#061121] rounded-xl p-4 sm:p-6 mb-6 text-left border border-[#1e345e]">
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-[#1e345e] pb-2">
                 Amendment History
               </h3>
@@ -390,7 +390,7 @@ export function SupervisorDashboard() {
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-          <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl p-8 flex flex-col justify-center items-center text-center shadow-xl">
+          <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl p-4 sm:p-6 md:p-8 flex flex-col justify-center items-center text-center shadow-xl">
             <div className="w-16 h-16 bg-[#112240] rounded-full flex items-center justify-center mb-4 border border-[#1e345e]">
               <Activity className="w-8 h-8 text-emerald-400" />
             </div>
@@ -427,7 +427,7 @@ export function SupervisorDashboard() {
             )}
           </div>
 
-          <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl p-8 flex flex-col shadow-xl">
+          <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl p-4 sm:p-6 md:p-8 flex flex-col shadow-xl">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-white">Quick Logs</h2>
               <button
@@ -477,7 +477,7 @@ export function SupervisorDashboard() {
                 ))}
               </div>
             ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-center p-6 border-2 border-dashed border-[#1e345e] rounded-xl bg-[#061121]/50">
+              <div className="flex-1 flex flex-col items-center justify-center text-center p-4 sm:p-6 border-2 border-dashed border-[#1e345e] rounded-xl bg-[#061121]/50">
                 <DollarSign className="w-8 h-8 text-slate-600 mb-2" />
                 <p className="text-slate-400 text-sm">No items logged yet.</p>
                 <p className="text-slate-500 text-xs mt-1">
@@ -595,7 +595,7 @@ export function SupervisorDashboard() {
       {/* Quick Log Modal */}
       {showQuickLog && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl w-full max-w-sm p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl w-full max-w-sm p-4 sm:p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
             <h3 className="text-lg font-bold text-white mb-4">
               Log Transaction
             </h3>
@@ -1007,7 +1007,7 @@ function CashUpForm({
   if (showPreview) {
     return (
       <div className="space-y-8 animate-in fade-in zoom-in-95 duration-300">
-        <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl overflow-hidden shadow-xl p-8">
+        <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl overflow-hidden shadow-xl p-4 sm:p-6 md:p-8">
           <h2 className="text-2xl font-bold text-white mb-6 border-b border-[#1e345e] pb-4">
             Review Your Submission
           </h2>
@@ -1082,7 +1082,7 @@ function CashUpForm({
             </div>
           </div>
 
-          <div className="text-sm bg-[#112240] p-6 rounded-xl border border-[#1e345e] mb-8">
+          <div className="text-sm bg-[#112240] p-4 sm:p-6 rounded-xl border border-[#1e345e] mb-8">
             <h3 className="text-slate-400 font-bold mb-4 uppercase tracking-wider text-xs">
               Verification Details
             </h3>
@@ -1136,7 +1136,7 @@ function CashUpForm({
             <Activity className="text-blue-400 w-5 h-5" /> Physical Cash Count
           </h2>
         </div>
-        <div className="p-6 space-y-4">
+        <div className="p-4 sm:p-6 space-y-4">
           <ReconListField
             title="Physical Cash Breakdown"
             items={cashBreakdown}
@@ -1155,7 +1155,7 @@ function CashUpForm({
             <PlusCircle className="text-emerald-400 w-5 h-5" /> Income
           </h2>
         </div>
-        <div className="p-6 space-y-8">
+        <div className="p-4 sm:p-6 space-y-8">
           <ReconListField
             title="Deposits Received"
             items={deposits}
@@ -1173,7 +1173,7 @@ function CashUpForm({
             <DollarSign className="text-rose-400 w-5 h-5" /> Deductions
           </h2>
         </div>
-        <div className="p-6 space-y-8">
+        <div className="p-4 sm:p-6 space-y-8">
           <ReconListField
             title="Debtors (Credit Sales)"
             items={debtors}
@@ -1219,7 +1219,7 @@ function CashUpForm({
             Notes & Verification
           </h2>
         </div>
-        <div className="p-6 space-y-6">
+        <div className="p-4 sm:p-6 space-y-6">
           <div>
             <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">
               Additional Notes (Optional)
@@ -1251,7 +1251,7 @@ function CashUpForm({
       </div>
 
       {/* SUMMARY */}
-      <div className="bg-gradient-to-br from-[#112240] to-[#0a192f] border border-[#1e345e] rounded-xl p-8 shadow-2xl relative overflow-hidden">
+      <div className="bg-gradient-to-br from-[#112240] to-[#0a192f] border border-[#1e345e] rounded-xl p-4 sm:p-6 md:p-8 shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 via-blue-500 to-rose-400" />
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center divide-y md:divide-y-0 md:divide-x divide-[#1e345e]">
@@ -1398,7 +1398,7 @@ function MissingSalesForm({ recon, rates, branch, onCancel, onSuccess }: any) {
           For cash up Date: {format(new Date(recon.date), "MMMM do, yyyy")}
         </p>
       </div>
-      <form onSubmit={handleSubmit} className="p-6 space-y-6 bg-[#061121]">
+      <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6 bg-[#061121]">
         <ReconListField
           title="Total Sales (from POS System)"
           items={sales}
