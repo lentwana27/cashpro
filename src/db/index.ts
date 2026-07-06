@@ -5,7 +5,7 @@ import * as schema from './schema.js';
 const { Pool } = pg;
 
 export const createPool = () => {
-  let dbUrl = process.env.DATABASE_URL || 'postgresql://postgres.kzhdpuvbitlhdzfnzrxf:vIsionSibanda18%24@aws-0-eu-west-1.pooler.supabase.com:6543/postgres';
+  let dbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL || 'postgresql://postgres.kzhdpuvbitlhdzfnzrxf:vIsionSibanda18%24@aws-0-eu-west-1.pooler.supabase.com:6543/postgres';
   if (dbUrl && dbUrl.includes('db.kzhdpuvbitlhdzfnzrxf.supabase.co')) {
     // Force use of IPv4 pooler for Supabase on Vercel
     dbUrl = 'postgresql://postgres.kzhdpuvbitlhdzfnzrxf:vIsionSibanda18%24@aws-0-eu-west-1.pooler.supabase.com:6543/postgres';
@@ -15,7 +15,7 @@ export const createPool = () => {
     return new Pool({
       connectionString: dbUrl,
       connectionTimeoutMillis: 15000,
-      ssl: dbUrl.includes('supabase.com') ? { rejectUnauthorized: false } : undefined,
+      ssl: dbUrl.includes('localhost') ? undefined : { rejectUnauthorized: false },
     });
   }
   return new Pool({
