@@ -28,6 +28,7 @@ export const createPool = () => {
 };
 
 const pool = createPool();
+console.log("Connecting to DB host:", pool.options.host);
 
 pool.on('error', (err) => {
   console.error('Unexpected error on idle SQL pool client:', err);

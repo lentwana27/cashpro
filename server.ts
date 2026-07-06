@@ -22,6 +22,7 @@ app.use(express.json());
 // ==========================================
 
 const api = express.Router();
+api.get("/health", (req, res) => res.json({ status: "ok" }));
 
 async function logAction(userId: string, userName: string, action: string, details: string) {
   try {
@@ -276,7 +277,7 @@ app.use('/api', api);
 app.use((err: any, req: any, res: any, next: any) => {
   console.error('Global Error Handler:', err);
   if (req.originalUrl.startsWith('/api')) {
-    res.status(500).json({ error: 'Internal Server Error: Database connection failed or invalid query.' });
+    res.status(500).json({ error: 'Internal Server Error: ' + (err instanceof Error ? err.message : String(err)), stack: err instanceof Error ? err.stack : undefined });
   } else {
     next(err);
   }

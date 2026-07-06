@@ -25,7 +25,7 @@ export const api = {
     if (!res.ok) {
       const text = await res.text();
       let err;
-      try { err = JSON.parse(text); } catch(e) { console.error('GET Failed API:', endpoint, 'Status:', res.status, 'Body:', text.substring(0, 50)); err = { error: res.statusText }; }
+      try { err = JSON.parse(text); } catch(e) { console.error('GET Failed API:', endpoint, 'Status:', res.status, 'Body:', text.substring(0, 50)); err = { error: res.status + ' ' + res.statusText }; }
       throw new Error(err.error || 'Server error');
     }
     const textRes = await res.text();
@@ -40,7 +40,7 @@ export const api = {
     if (!res.ok) {
       const text = await res.text();
       let err;
-      try { err = JSON.parse(text); } catch(e) { console.error('POST Failed API:', endpoint, 'Status:', res.status, 'Body:', text.substring(0, 50)); err = { error: res.statusText }; }
+      try { err = JSON.parse(text); } catch(e) { console.error('POST Failed API:', endpoint, 'Status:', res.status, 'Body:', text.substring(0, 50)); err = { error: res.status + ' ' + res.statusText }; }
       throw new Error(err.error || 'Server error');
     }
     const textRes = await res.text();
@@ -55,7 +55,7 @@ export const api = {
     if (!res.ok) {
       const text = await res.text();
       let err;
-      try { err = JSON.parse(text); } catch(e) { console.error('PUT Failed API:', endpoint, 'Status:', res.status, 'Body:', text.substring(0, 50)); err = { error: res.statusText }; }
+      try { err = JSON.parse(text); } catch(e) { console.error('PUT Failed API:', endpoint, 'Status:', res.status, 'Body:', text.substring(0, 50)); err = { error: res.status + ' ' + res.statusText }; }
       throw new Error(err.error || 'Server error');
     }
     const textRes = await res.text();
