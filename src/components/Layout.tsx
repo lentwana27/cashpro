@@ -1,6 +1,6 @@
 import { ReactNode, useState } from 'react';
 import { useAuth } from './AuthProvider';
-import { LogOut, LayoutDashboard, Building2, Users, FileText, Activity } from 'lucide-react';
+import { LogOut, LayoutDashboard, Building2, Users, FileText, Activity, UserSquare } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import clsx from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -51,7 +51,7 @@ export function Layout({ children }: { children: ReactNode }) {
           {['ADMIN', 'ACCOUNTANT', 'HEAD_ACCOUNTANT', 'DIRECTOR', 'AUDITOR'].includes(user.role) && (
             <>
               <div className="mt-6 mb-2 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">System</div>
-              {user.role === 'ADMIN' && (
+              {(user.role === 'ADMIN' || user.role === 'SUPERVISOR') && (
                 <Link to="/users" className="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:bg-[#112240] hover:text-emerald-400 transition-colors">
                   <Users className="w-5 h-5" />
                   <span className="font-medium">Users</span>
@@ -60,6 +60,10 @@ export function Layout({ children }: { children: ReactNode }) {
               <Link to="/branches" className="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:bg-[#112240] hover:text-emerald-400 transition-colors">
                 <Building2 className="w-5 h-5" />
                 <span className="font-medium">Branches</span>
+              </Link>
+              <Link to="/till-operators" className="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:bg-[#112240] hover:text-emerald-400 transition-colors">
+                <UserSquare className="w-5 h-5" />
+                <span className="font-medium">Till Operators</span>
               </Link>
             </>
           )}
@@ -99,7 +103,7 @@ export function Layout({ children }: { children: ReactNode }) {
               className="fixed inset-y-0 left-0 w-72 bg-[#0a192f] border-r border-[#1e345e] shadow-2xl flex flex-col z-50 md:hidden"
             >
               <div className="h-20 flex items-center justify-between px-6 border-b border-[#1e345e]">
-                <div className="flex items-center gap-3">
+                <div onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center border border-emerald-500/50">
                     <Activity className="text-emerald-400 w-5 h-5" />
                   </div>
@@ -123,7 +127,7 @@ export function Layout({ children }: { children: ReactNode }) {
                 {['ADMIN', 'ACCOUNTANT', 'HEAD_ACCOUNTANT', 'DIRECTOR', 'AUDITOR'].includes(user.role) && (
                   <>
                     <div className="mt-6 mb-2 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">System</div>
-                    {user.role === 'ADMIN' && (
+                    {(user.role === 'ADMIN' || user.role === 'SUPERVISOR') && (
                       <Link to="/users" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:bg-[#112240] hover:text-emerald-400 transition-colors">
                         <Users className="w-5 h-5" />
                         <span className="font-medium">Users</span>
@@ -132,7 +136,11 @@ export function Layout({ children }: { children: ReactNode }) {
                     <Link to="/branches" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:bg-[#112240] hover:text-emerald-400 transition-colors">
                       <Building2 className="w-5 h-5" />
                       <span className="font-medium">Branches</span>
-                    </Link>
+              </Link>
+              <Link to="/till-operators" className="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:bg-[#112240] hover:text-emerald-400 transition-colors">
+                <UserSquare className="w-5 h-5" />
+                <span className="font-medium">Till Operators</span>
+              </Link>
                   </>
                 )}
 

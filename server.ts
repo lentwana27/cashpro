@@ -253,6 +253,17 @@ api.post('/logs', async (req, res) => {
 });
 
 // Reconciliations
+
+api.delete('/reconciliations/branch/:branchId', async (req, res) => {
+  try {
+    const { branchId } = req.params;
+    await db.delete(schema.reconciliations).where(eq(schema.reconciliations.branchId, branchId));
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 api.get('/reconciliations', async (req, res) => {
   const recs = await db.select().from(schema.reconciliations).orderBy(desc(schema.reconciliations.createdAt));
   res.json(recs);

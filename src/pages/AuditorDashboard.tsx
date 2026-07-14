@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { DailyReconciliation, Branch } from '../lib/types';
+import { CashierShortageChart } from '../components/CashierShortageChart';
 import { Search, ShieldAlert, Download, Building2, Calendar, FileText, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
 import clsx from 'clsx';
 import { format } from 'date-fns';
@@ -275,7 +276,10 @@ export function AuditorDashboard() {
             </tbody>
           </table>
         </div>
+      
+        
       </div>
+      <CashierShortageChart reconciliations={filteredRecon} branches={branches} />
     </div>
   );
 }

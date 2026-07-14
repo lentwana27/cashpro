@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useAuth } from "../components/AuthProvider";
 import { api } from "../lib/api";
 import { ExchangeRate, DailyReconciliation, ReconLineItem } from "../lib/types";
+import { CashierPerformance } from "../components/CashierPerformance";
 import {
   DollarSign,
   CheckCircle2,
@@ -23,6 +24,8 @@ export function SupervisorDashboard() {
   const [submitted, setSubmitted] = useState<DailyReconciliation | null>(null);
   const [history, setHistory] = useState<DailyReconciliation[]>([]);
   const [branch, setBranch] = useState<any>(null);
+  const [branches, setBranches] = useState<any[]>([]);
+  const [cashiers, setCashiers] = useState<any[]>([]);
 
   const [isEditing, setIsEditing] = useState(false);
   const [isCashUpMode, setIsCashUpMode] = useState(false);
@@ -60,6 +63,11 @@ export function SupervisorDashboard() {
         user?.branchId ? api.get("/branches") : Promise.resolve([]),
       ]);
       setRates(ratesData);
+            try {
+        const u = await api.get('/users');
+        setCashiers(u.filter((x: any) => x.role === 'CASHIER' && x.branchId === user?.branchId));
+      } catch (e) {}
+      
       if (user?.branchId && locsData)
         setBranch(locsData.find((b: any) => b.id === user.branchId));
 
@@ -147,6 +155,21 @@ export function SupervisorDashboard() {
     return missing;
   }, [history]);
 
+  
+  const handleClearPastData = async () => {
+    if (!confirm("Are you sure you want to clear all past cashup data for this branch? This action cannot be undone and will not affect user accounts.")) return;
+    try {
+      await api.delete(`/reconciliations/branch/${user?.branchId}`);
+      setHistory([]);
+      setSubmitted(null);
+      alert("Past data cleared successfully.");
+      loadData();
+    } catch(e) {
+      console.error(e);
+      alert("Failed to clear past data.");
+    }
+  };
+
   const requestUnlock = async (dStr: string) => {
     try {
       await api.post("/reconciliations", {
@@ -197,7 +220,13 @@ export function SupervisorDashboard() {
             Branch Code: {user?.branchId}
           </p>
         </div>
-        <div>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={handleClearPastData}
+            className="flex items-center gap-2 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 px-4 py-2 rounded-lg font-bold text-sm transition-colors"
+          >
+            <Trash2 className="w-4 h-4" /> Clear Past Data
+          </button>
           <input
             type="date"
             value={date}
@@ -215,6 +244,7 @@ export function SupervisorDashboard() {
           recon={isEnteringSalesFor}
           rates={rates}
           branch={branch}
+          cashiers={cashiers}
           onCancel={() => setIsEnteringSalesFor(null)}
           onSuccess={() => {
             setIsEnteringSalesFor(null);
@@ -365,6 +395,7 @@ export function SupervisorDashboard() {
         </div>
       ) : isCashUpMode ? (
         <CashUpForm
+          cashiers={cashiers}
           branch={branch}
           branchId={user.branchId}
           supervisorId={user.id}
@@ -592,6 +623,12 @@ export function SupervisorDashboard() {
           </table>
         </div>
       </div>
+      
+      
+      
+      {history.length > 0 && (
+         <CashierPerformance reconciliations={history} branches={branches} />
+      )}
       {/* Quick Log Modal */}
       {showQuickLog && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
@@ -718,6 +755,7 @@ export function SupervisorDashboard() {
 
 function CashUpForm({
   branch,
+  cashiers = [],
   branchId,
   supervisorId,
   date,
@@ -932,7 +970,26 @@ function CashUpForm({
       usdEquivalent: cashTotalUsd,
     };
 
+
+    const computedTillVariances = tillNames.map((name: string, idx: number) => {
+        const tillSales = sales[idx]?.usdEquivalent || 0;
+        const matchingCash = cashBreakdown.filter((cb: any) => cb.description.includes(name) || cb.description.includes("End of Day Physical Cash Counted"));
+        const tillCash = matchingCash.reduce((acc: number, curr: any) => acc + (curr.usdEquivalent || 0), 0);
+        const cashierId = matchingCash.find((cb: any) => cb.cashierId)?.cashierId || '';
+        const cashierName = matchingCash.find((cb: any) => cb.cashierName)?.cashierName || 'Unknown';
+        
+        return {
+            tillName: name,
+            cashierId,
+            cashierName: cashierId ? cashierName : 'Unknown',
+            expected: tillSales,
+            actual: tillCash,
+            variance: tillCash - tillSales
+        };
+    });
+
     const payload: any = {
+
       branchId,
       supervisorId,
       date,
@@ -951,6 +1008,7 @@ function CashUpForm({
       tillCashBreakdown: cashBreakdown,
       expectedCashUsd: expected,
       varianceUsd: variance,
+      tillVariances: computedTillVariances,
       status: "PENDING",
       notes,
       signature,
@@ -1137,13 +1195,14 @@ function CashUpForm({
           </h2>
         </div>
         <div className="p-4 sm:p-6 space-y-4">
-          <ReconListField
+          <PhysicalCashListField
             title="Physical Cash Breakdown"
             items={cashBreakdown}
             setItems={setCashBreakdown}
             currencies={currencies}
             getUsd={getUsd}
             showCashierName={true}
+            cashiers={cashiers}
           />
         </div>
       </div>
@@ -1323,7 +1382,30 @@ function CashUpForm({
   );
 }
 
-function MissingSalesForm({ recon, rates, branch, onCancel, onSuccess }: any) {
+function MissingSalesForm({ recon, rates, branch, cashiers, onCancel, onSuccess }: any) {
+    const cashBreakdown = recon?.tillCashBreakdown || [];
+  const tillNames =
+    branch?.hasTills && branch.tills?.length > 0
+      ? branch.tills.map((t: any) => t.name)
+      : ["Total Sales"];
+
+  const [tillVariances, setTillVariances] = useState<any[]>(() => {
+    if (recon?.tillVariances && recon.tillVariances.length > 0) return recon.tillVariances;
+    return tillNames.map((name: string) => {
+        const matchingCash = cashBreakdown.filter((cb: any) => cb.description.includes(name) || cb.description.includes("End of Day Physical Cash Counted"));
+        const totalCash = matchingCash.reduce((acc: number, curr: any) => acc + (curr.usdEquivalent || 0), 0);
+        const cashierId = matchingCash.find((cb: any) => cb.cashierId)?.cashierId || '';
+        const cashierName = matchingCash.find((cb: any) => cb.cashierName)?.cashierName || '';
+        return {
+            tillName: name,
+            cashierId,
+            cashierName,
+            expected: 0,
+            actual: totalCash,
+            variance: 0
+        };
+    });
+  });
   const currencies = rates.map((r: any) => r.currencyCode);
   const getUsd = (amount: number, code: string) => {
     const rate =
@@ -1338,11 +1420,6 @@ function MissingSalesForm({ recon, rates, branch, onCancel, onSuccess }: any) {
     currencyCode: "USD",
     usdEquivalent: 0,
   });
-
-  const tillNames =
-    branch?.hasTills && branch.tills?.length > 0
-      ? branch.tills.map((t: any) => t.name)
-      : ["Total Sales"];
 
   const ensureArray = (item: any, defaultDescs: string[]): ReconLineItem[] => {
     if (!item) return defaultDescs.map(createItem);
@@ -1377,11 +1454,26 @@ function MissingSalesForm({ recon, rates, branch, onCancel, onSuccess }: any) {
       const expected = tSales - tDeductions;
       const cashTotalUsd = recon.endOfDayCash?.usdEquivalent || 0;
       const variance = cashTotalUsd - expected;
+      
+      const computedTillVariances = tillVariances.map((tv: any, idx: number) => {
+        const tillSales = updatedTotalSales[idx]?.usdEquivalent || 0;
+        const matchingCash = cashBreakdown.filter((cb: any) => cb.description.includes(tv.tillName) || cb.description.includes("End of Day Physical Cash Counted"));
+        const tillCash = matchingCash.reduce((acc: number, curr: any) => acc + (curr.usdEquivalent || 0), 0);
+        const cashier = cashiers.find((c: any) => c.id === tv.cashierId);
+        return {
+          ...tv,
+          cashierName: cashier?.name || 'Unknown',
+          expected: tillSales,
+          actual: tillCash,
+          variance: tillCash - tillSales
+        };
+      });
 
       await api.put(`/reconciliations/${recon.id}`, {
         totalSales: updatedTotalSales,
         expectedCashUsd: expected,
         varianceUsd: variance,
+        tillVariances: computedTillVariances,
         salesConfirmed: true,
       });
       onSuccess();
@@ -1399,6 +1491,37 @@ function MissingSalesForm({ recon, rates, branch, onCancel, onSuccess }: any) {
         </p>
       </div>
       <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6 bg-[#061121]">
+        
+      {branch?.hasTills && branch.tills?.length > 0 && (
+        <div className="bg-[#112240] p-4 rounded-xl border border-blue-500/20 mb-6">
+          <h3 className="text-lg font-bold text-white mb-4">Till & Cashier Assignment</h3>
+          <div className="space-y-4">
+            {tillVariances.map((tv: any, idx: number) => (
+              <div key={idx} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-3 bg-[#0a192f] rounded-lg border border-[#1e345e]">
+                <div className="font-medium text-blue-400 w-1/3">{tv.tillName}</div>
+                <div className="flex-1 w-full">
+                  <select 
+                    value={tv.cashierId || ''} 
+                    onChange={e => {
+                      const newVars = [...tillVariances];
+                      newVars[idx].cashierId = e.target.value;
+                      setTillVariances(newVars);
+                    }}
+                    className="w-full bg-[#061121] border border-[#1e345e] rounded-lg p-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    required
+                  >
+                    <option value="">Select Cashier for {tv.tillName}...</option>
+                    {cashiers.map((c: any) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
         <ReconListField
           title="Total Sales (from POS System)"
           items={sales}
@@ -1504,6 +1627,168 @@ function ReconField({
   );
 }
 
+function PhysicalCashListField({
+  title,
+  items,
+  setItems,
+  getUsd,
+  showCashierName,
+  cashiers = []
+}: any) {
+  const createItem = (desc: string) => ({
+    id: Math.random().toString(),
+    description: desc,
+    amount: 0,
+    amountZar: 0,
+    currencyCode: "USD",
+    usdEquivalent: 0,
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider">
+          {title}
+        </h3>
+        <button
+          type="button"
+          onClick={() => setItems([...items, createItem("")])}
+          className="text-xs flex items-center gap-1 bg-[#061121] hover:bg-[#1e345e] border border-[#1e345e] px-3 py-1.5 rounded-lg text-emerald-400 font-medium transition-colors"
+        >
+          <PlusCircle className="w-3.5 h-3.5" /> Add
+        </button>
+      </div>
+      <div className="space-y-3">
+        {items.length === 0 && (
+          <div className="text-sm text-slate-500 italic p-3 bg-[#061121] rounded-xl border border-[#1e345e]">
+            No records.
+          </div>
+        )}
+        {items.map((item: any, idx: number) => (
+          <div
+            key={item.id || idx}
+            className="flex flex-col sm:flex-row gap-4 sm:items-end bg-[#112240] p-4 rounded-xl border border-[#1e345e]"
+          >
+            <div className="flex-1 w-full">
+              <input
+                type="text"
+                value={item.description}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.preventDefault();
+                }}
+                onChange={(e) => {
+                  const newArr = [...items];
+                  newArr[idx].description = e.target.value;
+                  setItems(newArr);
+                }}
+                placeholder="Description..."
+                className="w-full bg-transparent text-sm text-white focus:outline-none mb-1 font-medium"
+              />
+              
+              {showCashierName && (
+                <select
+                  required
+                  value={item.cashierId || ""}
+                  onChange={(e) => {
+                    const newArr = [...items];
+                    newArr[idx].cashierId = e.target.value;
+                    const c = cashiers.find((x: any) => x.id === e.target.value);
+                    newArr[idx].cashierName = c ? c.name : "";
+                    setItems(newArr);
+                  }}
+                  className="w-full bg-[#061121] text-xs text-blue-300 focus:outline-none mb-2 border border-[#1e345e] p-1.5 rounded"
+                >
+                  <option value="">Select Till Operator...</option>
+                  {cashiers.map((c: any) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              )}
+
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <div className="flex rounded-lg shadow-sm border border-[#1e345e] overflow-hidden focus-within:ring-2 focus-within:ring-emerald-500/50">
+                  <span className="bg-[#061121] py-2 px-3 text-emerald-400 border-r border-[#1e345e] focus:outline-none">USD</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={
+                      item.amount === 0 && item.description === ""
+                        ? ""
+                        : item.amount
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") e.preventDefault();
+                    }}
+                    onChange={(e) => {
+                      const newArr = [...items];
+                      const rawVal = e.target.value.replace(/^0+(?=\d)/, "");
+                      newArr[idx].amount = rawVal;
+                      const usd = parseFloat(rawVal) || 0;
+                      const zar = parseFloat(newArr[idx].amountZar) || 0;
+                      newArr[idx].usdEquivalent = usd + getUsd(zar, "ZAR");
+                      setItems(newArr);
+                    }}
+                    className="flex-1 bg-[#061121] px-4 py-2 text-white focus:outline-none w-full"
+                    placeholder="0.00"
+                  />
+                </div>
+                
+                <div className="flex rounded-lg shadow-sm border border-[#1e345e] overflow-hidden focus-within:ring-2 focus-within:ring-emerald-500/50">
+                  <span className="bg-[#061121] py-2 px-3 text-emerald-400 border-r border-[#1e345e] focus:outline-none">ZAR</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={
+                      item.amountZar === 0 && item.description === ""
+                        ? ""
+                        : (item.amountZar || "")
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") e.preventDefault();
+                    }}
+                    onChange={(e) => {
+                      const newArr = [...items];
+                      const rawVal = e.target.value.replace(/^0+(?=\d)/, "");
+                      newArr[idx].amountZar = rawVal;
+                      const usd = parseFloat(newArr[idx].amount) || 0;
+                      const zar = parseFloat(rawVal) || 0;
+                      newArr[idx].usdEquivalent = usd + getUsd(zar, "ZAR");
+                      setItems(newArr);
+                    }}
+                    className="flex-1 bg-[#061121] px-4 py-2 text-white focus:outline-none w-full"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div className="w-full sm:w-32 bg-[#061121] border border-[#1e345e] px-4 py-2 rounded-lg flex items-center justify-between text-sm h-10 shadow-inner">
+                <span className="text-slate-500">Total USD</span>
+                <span className="text-emerald-400 font-medium">
+                  ${(item.usdEquivalent || 0).toFixed(2)}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setItems(items.filter((_: any, i: number) => i !== idx))
+                }
+                className="h-10 px-3 text-rose-500 hover:text-rose-400 p-2"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
 function ReconListField({
   title,
   items,
@@ -1511,6 +1796,7 @@ function ReconListField({
   currencies,
   getUsd,
   showCashierName,
+  cashiers = []
 }: any) {
   const createItem = (desc: string) => ({
     id: Math.random().toString(),
@@ -1574,21 +1860,24 @@ function ReconListField({
                 placeholder="Invoice # (Optional)..."
                 className="w-full bg-transparent text-xs text-slate-400 focus:outline-none mb-2"
               />
-              {showCashierName && (
-                <input
-                  type="text"
-                  value={item.cashierName || ""}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") e.preventDefault();
-                  }}
+                            {showCashierName && (
+                <select
+                  required
+                  value={item.cashierId || ""}
                   onChange={(e) => {
                     const newArr = [...items];
-                    newArr[idx].cashierName = e.target.value;
+                    newArr[idx].cashierId = e.target.value;
+                    const c = cashiers.find((x: any) => x.id === e.target.value);
+                    newArr[idx].cashierName = c ? c.name : "";
                     setItems(newArr);
                   }}
-                  placeholder="Cashier Name (Optional)..."
-                  className="w-full bg-transparent text-xs text-blue-300 focus:outline-none mb-2"
-                />
+                  className="w-full bg-[#061121] text-xs text-blue-300 focus:outline-none mb-2 border border-[#1e345e] p-1.5 rounded"
+                >
+                  <option value="">Select Till Operator...</option>
+                  {cashiers.map((c: any) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
               )}
               <div className="flex rounded-lg shadow-sm border border-[#1e345e] overflow-hidden focus-within:ring-2 focus-within:ring-emerald-500/50">
                 <select

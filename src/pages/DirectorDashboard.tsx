@@ -2,6 +2,8 @@ import { DollarSign, AlertCircle, TrendingDown, TrendingUp, Activity as Activity
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { DailyReconciliation, Branch } from '../lib/types';
+import { CashierPerformance } from '../components/CashierPerformance';
+import { CashierShortageChart } from '../components/CashierShortageChart';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import clsx from 'clsx';
 import { format } from 'date-fns';
@@ -470,6 +472,10 @@ export function DirectorDashboard() {
             </table>
           </div>
         </div>
+        
+        <div className="lg:col-span-2">
+          <CashierShortageChart reconciliations={filteredReconciliations} branches={branches} />
+        </div>
 
         <div ref={tableRef} className="bg-[#0a192f] border border-[#1e345e] rounded-xl p-4 sm:p-6 shadow-xl lg:col-span-2">
           <h2 className="text-lg font-semibold text-white mb-6">Recent Cash-Up Submissions</h2>
@@ -571,6 +577,8 @@ const BreakdownSection = ({ title, items }: { title: string, items: any }) => {
             <span className="text-slate-300 font-mono">${(item.usdEquivalent||0).toFixed(2)}</span>
           </div>
         ))}
+      
+        
       </div>
     </div>
   );

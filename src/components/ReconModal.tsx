@@ -1,4 +1,8 @@
 import React from 'react';
+import { useAuth } from '../components/AuthProvider';
+import { useState } from 'react';
+import { api } from '../lib/api';
+import { Check, Edit2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { X } from 'lucide-react';
 import clsx from 'clsx';
@@ -30,14 +34,39 @@ const BreakdownSection = ({ title, items }: { title: string, items: any }) => {
 }
 
 export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void }) {
-  if (!recon) return null;
+  const { user } = useAuth();
+  const [localRecon, setLocalRecon] = useState(recon);
+  const [editingNoteIdx, setEditingNoteIdx] = useState<number | null>(null);
+  const [noteInput, setNoteInput] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const saveNote = async (idx: number) => {
+    try {
+      setSaving(true);
+      const newVariances = [...localRecon.tillVariances];
+      newVariances[idx].note = noteInput;
+      
+      const updated = await api.put(`/reconciliations/${localRecon.id}`, {
+        tillVariances: newVariances
+      });
+      
+      setLocalRecon(updated);
+      setEditingNoteIdx(null);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!localRecon) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
       <div className="bg-[#0a192f] border border-[#1e345e] rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden my-auto">
         <div className="p-6 border-b border-[#1e345e] flex justify-between items-center sticky top-0 bg-[#0a192f] z-10">
           <div>
             <h2 className="text-xl font-bold text-white">Reconciliation Details</h2>
-            <p className="text-sm text-slate-400 mt-1">{format(new Date(recon.date), 'MMMM dd, yyyy')} - <span className="font-mono text-emerald-400">{recon.status}</span></p>
+            <p className="text-sm text-slate-400 mt-1">{format(new Date(localRecon.date), 'MMMM dd, yyyy')} - <span className="font-mono text-emerald-400">{localRecon.status}</span></p>
           </div>
           <button onClick={onClose} className="text-slate-500 hover:text-white bg-[#112240] p-2 rounded-lg transition-colors">
             <X className="w-5 h-5" />
@@ -48,28 +77,96 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
           <div>
             <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-[#1e345e] pb-2">Income breakdown</h4>
             <div className="space-y-4">
-              <BreakdownSection title="Total Sales" items={recon.totalSales} />
-              <BreakdownSection title="Deposits Received" items={recon.depositsReceived} />
+              <BreakdownSection title="Total Sales" items={localRecon.totalSales} />
+              <BreakdownSection title="Deposits Received" items={localRecon.depositsReceived} />
             </div>
           </div>
           <div>
             <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-[#1e345e] pb-2">Deductions breakdown</h4>
             <div className="space-y-4">
-              <BreakdownSection title="Debtors" items={recon.debtors} />
-              <BreakdownSection title="Deposit Claims" items={recon.depositClaims} />
-              <BreakdownSection title="Returns / Refunds" items={recon.returnsRefunds} />
-              <BreakdownSection title="Expenses" items={recon.expenses} />
-              <BreakdownSection title="Purchases" items={recon.purchases} />
+              <BreakdownSection title="Debtors" items={localRecon.debtors} />
+              <BreakdownSection title="Deposit Claims" items={localRecon.depositClaims} />
+              <BreakdownSection title="Returns / Refunds" items={localRecon.returnsRefunds} />
+              <BreakdownSection title="Expenses" items={localRecon.expenses} />
+              <BreakdownSection title="Purchases" items={localRecon.purchases} />
             </div>
           </div>
         </div>
         
-        {recon.tillCashBreakdown && recon.tillCashBreakdown.length > 0 && (
+        
+        {localRecon.tillVariances && localRecon.tillVariances.length > 0 && (
+          <div className="px-6 pb-6 bg-[#061121]">
+            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-[#1e345e] pb-2">Till Variances</h4>
+            <div className="space-y-4">
+              {localRecon.tillVariances.map((tv: any, idx: number) => (
+                <div key={idx} className="bg-[#112240] border border-[#1e345e] rounded-lg p-4">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <div className="font-bold text-white">{tv.tillName}</div>
+                      <div className="text-sm text-slate-400">Cashier: {tv.cashierName}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className={clsx("font-bold font-mono", (tv.variance || 0) > 0 ? "text-emerald-400" : (tv.variance || 0) < 0 ? "text-rose-400" : "text-blue-400")}>
+                        {(tv.variance || 0) > 0 ? '+' : ''}{(tv.variance || 0).toFixed(2)} USD
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        Expected: ${(tv.expected || 0).toFixed(2)} | Actual: ${(tv.actual || 0).toFixed(2)}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {editingNoteIdx === idx ? (
+                    <div className="mt-3 flex gap-2">
+                      <input 
+                        type="text" 
+                        value={noteInput} 
+                        onChange={(e) => setNoteInput(e.target.value)} 
+                        placeholder="Add contextual note to explain this variance..."
+                        className="flex-1 bg-[#061121] border border-[#1e345e] text-white text-sm p-2 rounded focus:outline-none focus:border-blue-500"
+                      />
+                      <button 
+                        onClick={() => saveNote(idx)}
+                        disabled={saving}
+                        className="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors flex items-center justify-center disabled:opacity-50"
+                      >
+                        <Check className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="mt-3">
+                      {tv.note ? (
+                        <div className="flex items-start justify-between gap-4 text-sm bg-[#061121]/50 p-2.5 rounded border border-[#1e345e]/50">
+                          <div className="text-slate-300 italic">"{tv.note}"</div>
+                          {(user?.role === 'SUPERVISOR' || user?.role === 'ADMIN') && (
+                            <button onClick={() => { setEditingNoteIdx(idx); setNoteInput(tv.note); }} className="text-slate-500 hover:text-blue-400 transition-colors shrink-0">
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        (user?.role === 'SUPERVISOR' || user?.role === 'ADMIN') && (
+                          <button 
+                            onClick={() => { setEditingNoteIdx(idx); setNoteInput(''); }}
+                            className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                          >
+                            + Add Contextual Note
+                          </button>
+                        )
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {localRecon.tillCashBreakdown && localRecon.tillCashBreakdown.length > 0 && (
           <div className="px-6 pb-6 bg-[#061121]">
             <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-[#1e345e] pb-2">Physical Cash Breakdown</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="space-y-4">
-                <BreakdownSection title="Physical Cash Counted" items={recon.tillCashBreakdown} />
+                <BreakdownSection title="Physical Cash Counted" items={localRecon.tillCashBreakdown} />
               </div>
             </div>
           </div>
@@ -79,44 +176,44 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 font-mono">
             <div>
               <div className="text-slate-500 mb-1 text-xs uppercase tracking-wider">Expected Cash</div>
-              <div className="text-slate-300 text-lg">${(recon.expectedCashUsd || 0).toFixed(2)}</div>
+              <div className="text-slate-300 text-lg">${(localRecon.expectedCashUsd || 0).toFixed(2)}</div>
             </div>
             <div>
               <div className="text-slate-500 mb-1 text-xs uppercase tracking-wider">Physical Cash Count</div>
-              <div className="text-white font-bold text-lg">${(recon.endOfDayCash?.usdEquivalent || 0).toFixed(2)}</div>
+              <div className="text-white font-bold text-lg">${(localRecon.endOfDayCash?.usdEquivalent || 0).toFixed(2)}</div>
             </div>
             <div>
               <div className="text-slate-500 mb-1 text-xs uppercase tracking-wider">Variance</div>
-              <div className={clsx("font-bold text-lg", recon.varianceUsd > 0 ? "text-emerald-400" : recon.varianceUsd < 0 ? "text-rose-400" : "text-blue-400")}>
-                {recon.varianceUsd > 0 ? '+' : ''}{(recon.varianceUsd || 0).toFixed(2)}
+              <div className={clsx("font-bold text-lg", localRecon.varianceUsd > 0 ? "text-emerald-400" : localRecon.varianceUsd < 0 ? "text-rose-400" : "text-blue-400")}>
+                {localRecon.varianceUsd > 0 ? '+' : ''}{(localRecon.varianceUsd || 0).toFixed(2)}
               </div>
             </div>
           </div>
         </div>
 
-        {(recon.notes || recon.signature || (recon.amendmentNotes && recon.amendmentNotes.length > 0)) && (
+        {(localRecon.notes || localRecon.signature || (localRecon.amendmentNotes && localRecon.amendmentNotes.length > 0)) && (
           <div className="px-6 pb-6 bg-[#0a192f]">
             <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-[#1e345e] pb-2">Notes & Verification</h4>
-            {recon.amendmentNotes && recon.amendmentNotes.length > 0 && (
+            {localRecon.amendmentNotes && localRecon.amendmentNotes.length > 0 && (
               <div className="mb-4 space-y-2">
                 <p className="text-xs text-slate-500 mb-1">Amendment History</p>
-                {recon.amendmentNotes.map((note: string, i: number) => (
+                {localRecon.amendmentNotes.map((note: string, i: number) => (
                   <div key={i} className="text-sm text-yellow-500/90 bg-yellow-500/10 p-3 rounded-lg border border-yellow-500/20 leading-relaxed font-medium">
                     {note}
                   </div>
                 ))}
               </div>
             )}
-            {recon.notes && (
+            {localRecon.notes && (
               <div className="mb-4">
                 <p className="text-xs text-slate-500 mb-1">Additional Notes</p>
-                <p className="text-sm text-slate-300 bg-[#061121] p-3 rounded-lg border border-[#1e345e]">{recon.notes}</p>
+                <p className="text-sm text-slate-300 bg-[#061121] p-3 rounded-lg border border-[#1e345e]">{localRecon.notes}</p>
               </div>
             )}
-            {recon.signature && (
+            {localRecon.signature && (
               <div>
                 <p className="text-xs text-slate-500 mb-1">Digitally Signed By</p>
-                <p className="text-lg text-emerald-400 font-serif italic">{recon.signature}</p>
+                <p className="text-lg text-emerald-400 font-serif italic">{localRecon.signature}</p>
               </div>
             )}
           </div>

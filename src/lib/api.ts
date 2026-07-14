@@ -20,6 +20,17 @@ const getHeaders = () => {
 };
 
 export const api = {
+  async delete(endpoint: string) {
+    const res = await fetch(`${API_BASE}${endpoint}`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+    });
+    if (!res.ok) {
+      throw new Error('Server error');
+    }
+    const textRes = await res.text();
+    try { return JSON.parse(textRes); } catch(e) { return {}; }
+  },
   async get(endpoint: string) {
     const res = await fetch(`${API_BASE}${endpoint}`, { headers: getHeaders() });
     if (!res.ok) {

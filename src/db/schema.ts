@@ -68,6 +68,7 @@ export const reconciliations = pgTable('reconciliations', {
   purchases: jsonb('purchases'),
   endOfDayCash: jsonb('end_of_day_cash'),
   tillCashBreakdown: jsonb('till_cash_breakdown'),
+  tillVariances: jsonb('till_variances'),
   
   expectedCashUsd: doublePrecision('expected_cash_usd').notNull(),
   varianceUsd: doublePrecision('variance_usd').notNull(),

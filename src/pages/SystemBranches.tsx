@@ -1,11 +1,14 @@
+import { Link } from 'react-router-dom';
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Branch, User, DailyReconciliation } from '../lib/types';
-import { Building2, X, CheckCircle, Activity, Search, Target, MessageCircle, AlertTriangle, Send, ShieldCheck, Plus } from 'lucide-react';
+import { Building2, X, CheckCircle, Activity, Search, Target, MessageCircle, AlertTriangle, Send, ShieldCheck, Plus, UserSquare, UserPlus, ArrowRightLeft } from 'lucide-react';
 import clsx from 'clsx';
 import { formatDistanceToNow, format } from 'date-fns';
 import { useAuth } from '../components/AuthProvider';
 import { ReconModal } from '../components/ReconModal';
+import { BranchHistoryModal } from '../components/BranchHistoryModal';
+import { CashierHistoryModal } from '../components/CashierHistoryModal';
 import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, Cell } from 'recharts';
 
 export function SystemBranches() {
@@ -19,10 +22,14 @@ export function SystemBranches() {
   const [reconciliations, setReconciliations] = useState<DailyReconciliation[]>([]);
   const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
   const [viewReconId, setViewReconId] = useState<string | null>(null);
+  const [isAssigningOperator, setIsAssigningOperator] = useState(false);
+  const [selectedOperatorId, setSelectedOperatorId] = useState('');
 
   const [isAddingBranch, setIsAddingBranch] = useState(false);
   const [editForm, setEditForm] = useState<Partial<Branch>>({ active: true, tills: [], hasTills: false });
   const [editTillName, setEditTillName] = useState('');
+  const [showBranchHistory, setShowBranchHistory] = useState(false);
+  const [selectedCashierForHistory, setSelectedCashierForHistory] = useState<{id: string, name: string} | null>(null);
 
   const loadData = () => {
     Promise.all([
@@ -53,6 +60,18 @@ export function SystemBranches() {
       }
     });
     return allRelated;
+  };
+
+  const handleAssignOperator = async () => {
+    if (!selectedOperatorId || !selectedBranch) return;
+    try {
+      await api.put(`/users/${selectedOperatorId}`, { branchId: selectedBranch.id });
+      setIsAssigningOperator(false);
+      setSelectedOperatorId('');
+      loadData();
+    } catch (e) {
+      alert("Failed to assign operator.");
+    }
   };
 
   const handleSendAlert = async () => {
@@ -91,6 +110,50 @@ export function SystemBranches() {
     } catch (e) {
       alert("Error saving branch. Make sure the code is unique.");
     }
+  };
+
+  const getTillOperatorsForBranch = (bId: string) => {
+    const currentAssigned = users.filter(u => u.branchId === bId && u.role === 'CASHIER');
+    const branchRecons = reconciliations.filter(r => r.branchId === bId);
+    
+    const pastOperatorIds = new Set<string>();
+    branchRecons.forEach(r => {
+      r.tillVariances?.forEach(tv => {
+        if (tv.cashierId) pastOperatorIds.add(tv.cashierId);
+      });
+    });
+
+    const allRelated = [...currentAssigned];
+    pastOperatorIds.forEach(uid => {
+      if (uid && !allRelated.some(u => u.id === uid)) {
+        const u = users.find(x => x.id === uid);
+        if (u) allRelated.push(u);
+      }
+    });
+
+    return allRelated;
+  };
+
+  const getTillVariancesForOperatorAndBranch = (operatorId: string, bId: string) => {
+    const branchRecons = reconciliations.filter(r => r.branchId === bId);
+    let operatorRecords: any[] = [];
+    
+    branchRecons.forEach(r => {
+      const tvs = r.tillVariances?.filter(tv => tv.cashierId === operatorId) || [];
+      tvs.forEach(tv => {
+        operatorRecords.push({
+          date: r.date,
+          status: r.status,
+          reconId: r.id,
+          varianceUsd: tv.variance,
+          expected: tv.expected,
+          actual: tv.actual,
+          tillName: tv.tillName
+        });
+      });
+    });
+    
+    return operatorRecords.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   };
 
   const getCashUpsForSupervisorAndBranch = (supId: string, bId: string) => {
@@ -232,13 +295,24 @@ export function SystemBranches() {
                   <h2 className="text-xl font-bold text-white">{selectedBranch.name} Dashboard</h2>
                   <p className="text-slate-400 text-sm mt-1">{selectedBranch.location}</p>
                 </div>
-                {currentUser?.role === 'ADMIN' && (
-                  <button onClick={() => { setEditForm({...selectedBranch}); setIsAddingBranch(true); }} className="text-sm px-4 py-2 bg-[#112240] border border-[#1e345e] text-slate-300 rounded hover:text-white transition-colors">
-                    Configure Branch
+                <div className="flex gap-2">
+                  <button onClick={() => setShowBranchHistory(true)} className="text-sm px-4 py-2 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded hover:bg-blue-500/20 transition-colors">
+                    View Branch History
                   </button>
-                )}
+                  {currentUser?.role === 'ADMIN' && (
+                    <button onClick={() => { setEditForm({...selectedBranch}); setIsAddingBranch(true); }} className="text-sm px-4 py-2 bg-[#112240] border border-[#1e345e] text-slate-300 rounded hover:text-white transition-colors">
+                      Configure Branch
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-8">
+                <div className="flex items-center justify-between mb-4 mt-2">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <ShieldCheck className="w-5 h-5 text-emerald-400" /> Supervisors
+                  </h3>
+                </div>
+
                 {getSupervisorsForBranch(selectedBranch.id).length === 0 ? (
                   <div className="text-center py-12 text-slate-500">
                     No supervisors or cash-up history for this branch.
@@ -368,6 +442,92 @@ export function SystemBranches() {
                     );
                   })
                 )}
+
+                <div className="mt-12 mb-4 flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <UserSquare className="w-5 h-5 text-indigo-400" /> Till Operators (Cashiers)
+                  </h3>
+                  {currentUser?.role === 'ADMIN' && (
+                    <button 
+                      onClick={() => setIsAssigningOperator(true)}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 rounded font-medium text-xs transition-colors"
+                    >
+                      <UserPlus className="w-4 h-4" /> Add / Transfer Operator
+                    </button>
+                  )}
+                </div>
+                
+                {getTillOperatorsForBranch(selectedBranch.id).length === 0 ? (
+                  <div className="text-center py-8 text-slate-500 bg-[#0a192f] rounded-xl border border-[#1e345e]">
+                    No till operators assigned to this branch.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4">
+                    {getTillOperatorsForBranch(selectedBranch.id).map(op => {
+                      const opVars = getTillVariancesForOperatorAndBranch(op.id, selectedBranch.id);
+                      const totalOpVariance = opVars.reduce((acc, v) => acc + (v.varianceUsd || 0), 0);
+                      const isCurrent = op.branchId === selectedBranch.id;
+                      
+                      return (
+                        <div key={op.id} className="bg-[#0a192f] border border-[#1e345e] rounded-xl overflow-hidden shadow-sm hover:border-blue-500/30 transition-colors cursor-pointer" onClick={() => setSelectedCashierForHistory({ id: op.id, name: op.name })}>
+                          <div className="p-4 border-b border-[#1e345e] flex items-center justify-between bg-[#112240]">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-[#1e345e] text-slate-300 flex items-center justify-center font-bold text-sm">
+                                {op.name.charAt(0)}
+                              </div>
+                              <div>
+                                <div className="font-bold text-white flex items-center gap-2">
+                                  {op.name}
+                                  {!isCurrent && <span className="text-[10px] uppercase bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full">Transferred</span>}
+                                </div>
+                                <div className="text-xs text-slate-400">{op.email}</div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-xs text-slate-400 mb-0.5">Net Variance</div>
+                              <div className={clsx("font-bold text-sm", totalOpVariance > 0 ? "text-emerald-400" : totalOpVariance < 0 ? "text-rose-400" : "text-white")}>
+                                {totalOpVariance > 0 ? '+' : ''}{totalOpVariance.toFixed(2)} USD
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {opVars.length > 0 ? (
+                            <div className="overflow-x-auto p-0">
+                              <table className="w-full text-left text-xs whitespace-nowrap">
+                                <thead className="bg-[#061121] text-slate-400 border-b border-[#1e345e]">
+                                  <tr>
+                                    <th className="px-4 py-2 font-medium">Date</th>
+                                    <th className="px-4 py-2 font-medium">Till Name</th>
+                                    <th className="px-4 py-2 font-medium">Expected</th>
+                                    <th className="px-4 py-2 font-medium">Actual</th>
+                                    <th className="px-4 py-2 font-medium">Variance</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-[#1e345e]">
+                                  {opVars.map((v, idx) => (
+                                    <tr key={idx} className="hover:bg-[#112240]/50">
+                                      <td className="px-4 py-2 text-slate-300 font-mono">{format(new Date(v.date), 'MMM dd, yyyy')}</td>
+                                      <td className="px-4 py-2 text-slate-300">{v.tillName}</td>
+                                      <td className="px-4 py-2 text-slate-400 font-mono">${v.expected.toFixed(2)}</td>
+                                      <td className="px-4 py-2 text-slate-400 font-mono">${v.actual.toFixed(2)}</td>
+                                      <td className={clsx("px-4 py-2 font-bold font-mono", v.varianceUsd > 0 ? "text-emerald-400" : v.varianceUsd < 0 ? "text-rose-400" : "text-slate-300")}>
+                                        {v.varianceUsd > 0 ? '+' : ''}{v.varianceUsd.toFixed(2)}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : (
+                            <div className="p-3 text-center text-xs text-slate-500">
+                              No till variances recorded.
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </>
           ) : (
@@ -430,6 +590,73 @@ export function SystemBranches() {
         </div>
       )}
 
+      
+      {isAssigningOperator && selectedBranch && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl shadow-2xl p-6 w-full max-w-md relative">
+            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+              <ArrowRightLeft className="w-5 h-5 text-indigo-400" /> Assign Operator to Branch
+            </h3>
+            <p className="text-sm text-slate-400 mb-4">
+              Select an existing Cashier / Till Operator to transfer them to <strong>{selectedBranch.name}</strong>. Their past history remains intact.
+            </p>
+            <div className="bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs p-3 rounded-lg mb-6 flex items-start gap-2">
+              <span className="shrink-0 mt-0.5">ℹ️</span>
+              <span>Need to add a completely new operator? Go to the <strong><Link to="/users" className="underline hover:text-white">Users</Link></strong> tab to register them first.</span>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-2">Select Till Operator</label>
+                <select 
+                  value={selectedOperatorId}
+                  onChange={e => setSelectedOperatorId(e.target.value)}
+                  className="w-full bg-[#061121] border border-[#1e345e] text-white p-3 rounded-lg focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="">-- Choose an operator --</option>
+                  {users.filter(u => u.role === 'CASHIER' && u.branchId !== selectedBranch.id).map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} ({u.email})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="pt-4 flex justify-end gap-3 border-t border-[#1e345e]">
+                <button 
+                  onClick={() => setIsAssigningOperator(false)}
+                  className="px-4 py-2 text-slate-400 hover:text-white text-sm font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleAssignOperator}
+                  disabled={!selectedOperatorId}
+                  className="px-6 py-2 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white font-bold rounded-lg text-sm transition-colors"
+                >
+                  Assign Operator
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showBranchHistory && selectedBranch && (
+        <BranchHistoryModal
+          branch={selectedBranch}
+          reconciliations={reconciliations}
+          onClose={() => setShowBranchHistory(false)}
+        />
+      )}
+      {selectedCashierForHistory && selectedBranch && (
+        <CashierHistoryModal
+          cashierId={selectedCashierForHistory.id}
+          cashierName={selectedCashierForHistory.name}
+          reconciliations={reconciliations}
+          branches={branches}
+          onClose={() => setSelectedCashierForHistory(null)}
+        />
+      )}
       {viewReconId && (
         <ReconModal 
           recon={reconciliations.find(r => r.id === viewReconId)}

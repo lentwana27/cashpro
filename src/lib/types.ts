@@ -1,4 +1,4 @@
-export type UserRole = 'ADMIN' | 'ACCOUNTANT' | 'HEAD_ACCOUNTANT' | 'DIRECTOR' | 'SUPERVISOR' | 'AUDITOR';
+export type UserRole = 'ADMIN' | 'ACCOUNTANT' | 'HEAD_ACCOUNTANT' | 'DIRECTOR' | 'SUPERVISOR' | 'AUDITOR' | 'CASHIER';
 
 export interface User {
   id: string;
@@ -73,6 +73,7 @@ export interface ReconLineItem {
   cashierName?: string;
   category?: string;
   amount: number | string;
+  amountZar?: number | string;
   currencyCode: string;
   usdEquivalent: number;
 }
@@ -98,6 +99,7 @@ export interface DailyReconciliation {
   // Cash
   endOfDayCash: ReconLineItem;
   tillCashBreakdown?: ReconLineItem[];
+  tillVariances?: { tillId?: string; tillName: string; cashierId: string; cashierName: string; expected: number; actual: number; variance: number }[];
   
   // Totals
   expectedCashUsd: number;

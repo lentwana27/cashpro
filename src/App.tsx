@@ -11,6 +11,7 @@ import { Signup } from './pages/Signup';
 import { DashboardRouter } from './pages/DashboardRouter';
 import { SystemBranches } from './pages/SystemBranches';
 import { SystemUsers } from './pages/SystemUsers';
+import { TillOperators } from './pages/TillOperators';
 import React, { useEffect } from 'react';
 
 function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode, allowedRoles?: string[] }) {
@@ -41,6 +42,13 @@ export default function App() {
               </Layout>
             </ProtectedRoute>
           } />
+          <Route path="/till-operators" element={
+            <ProtectedRoute allowedRoles={['ADMIN', 'ACCOUNTANT', 'HEAD_ACCOUNTANT', 'DIRECTOR', 'AUDITOR', 'SUPERVISOR']}>
+              <Layout>
+                <TillOperators />
+              </Layout>
+            </ProtectedRoute>
+          } />
           <Route path="/branches" element={
             <ProtectedRoute allowedRoles={['ADMIN', 'ACCOUNTANT', 'HEAD_ACCOUNTANT', 'DIRECTOR', 'AUDITOR']}>
               <Layout>
@@ -49,7 +57,7 @@ export default function App() {
             </ProtectedRoute>
           } />
           <Route path="/users" element={
-            <ProtectedRoute allowedRoles={['ADMIN']}>
+            <ProtectedRoute allowedRoles={['ADMIN', 'SUPERVISOR']}>
               <Layout>
                 <SystemUsers />
               </Layout>
