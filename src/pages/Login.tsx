@@ -8,6 +8,7 @@ import { motion } from 'framer-motion';
 export function Login() {
   const [step, setStep] = useState<'login' | '2fa'>(() => sessionStorage.getItem('cashup_temp_token') ? '2fa' : 'login');
   const [isSetup, setIsSetup] = useState<boolean>(() => sessionStorage.getItem('cashup_2fa_setup') === 'true');
+  const [authMethod, setAuthMethod] = useState<'STATIC' | 'EMAIL'>(() => sessionStorage.getItem('cashup_auth_method') as 'STATIC' | 'EMAIL' || 'EMAIL');
   const [tempToken, setTempToken] = useState<string>(() => sessionStorage.getItem('cashup_temp_token') || '');
   const [twoFactorCode, setTwoFactorCode] = useState('');
   
@@ -28,8 +29,10 @@ export function Login() {
       if (result.requires2FA) {
         sessionStorage.setItem('cashup_temp_token', result.tempToken);
         if (result.isSetup) sessionStorage.setItem('cashup_2fa_setup', 'true');
+        if (result.authMethod) sessionStorage.setItem('cashup_auth_method', result.authMethod);
         setTempToken(result.tempToken);
         setIsSetup(result.isSetup);
+        setAuthMethod(result.authMethod || 'EMAIL');
         setStep('2fa');
       } else {
         login(result.user, result.token);
@@ -132,9 +135,13 @@ export function Login() {
           ) : (
             <form onSubmit={handle2FA} className="space-y-5">
               <div className="mb-4 text-sm text-slate-300 text-center">
-                {isSetup 
-                  ? "Please set a new 6-digit authentication code to secure your account."
-                  : "Please enter your 6-digit authentication code to verify your identity."}
+                {authMethod === 'STATIC' ? (
+                  isSetup 
+                    ? "Please set a new 6-digit authentication code to secure your account."
+                    : "Please enter your 6-digit authentication code to verify your identity."
+                ) : (
+                  "We've sent a 6-digit authentication code to your email. Please enter it below to verify your identity."
+                )}
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-400 mb-2 uppercase tracking-wider">Authentication Code</label>
@@ -159,7 +166,7 @@ export function Login() {
                 disabled={loading}
                 className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-emerald-500 hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 focus:ring-offset-[#061121] transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-4 shadow-[0_0_20px_rgba(52,211,153,0.3)] hover:shadow-[0_0_30px_rgba(52,211,153,0.5)]"
               >
-                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (isSetup ? 'Save & Access' : 'Verify & Access')}
+                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (authMethod === 'STATIC' && isSetup ? 'Save & Access' : 'Verify Code & Access')}
               </button>
               <button
                 type="button"
