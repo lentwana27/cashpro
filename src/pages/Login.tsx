@@ -2,13 +2,12 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../components/AuthProvider';
 import { api } from '../lib/api';
-import { Activity, Mail, Lock, Loader2, KeyRound } from 'lucide-react';
+import { Activity, Mail, Lock, Loader2,  } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export function Login() {
   const [step, setStep] = useState<'login' | '2fa'>(() => sessionStorage.getItem('cashup_temp_token') ? '2fa' : 'login');
   const [isSetup, setIsSetup] = useState<boolean>(() => sessionStorage.getItem('cashup_2fa_setup') === 'true');
-  const [authMethod, setAuthMethod] = useState<'STATIC' | 'EMAIL'>(() => sessionStorage.getItem('cashup_auth_method') as 'STATIC' | 'EMAIL' || 'EMAIL');
   const [tempToken, setTempToken] = useState<string>(() => sessionStorage.getItem('cashup_temp_token') || '');
   const [twoFactorCode, setTwoFactorCode] = useState('');
   
@@ -29,10 +28,8 @@ export function Login() {
       if (result.requires2FA) {
         sessionStorage.setItem('cashup_temp_token', result.tempToken);
         if (result.isSetup) sessionStorage.setItem('cashup_2fa_setup', 'true');
-        if (result.authMethod) sessionStorage.setItem('cashup_auth_method', result.authMethod);
         setTempToken(result.tempToken);
         setIsSetup(result.isSetup);
-        setAuthMethod(result.authMethod || 'EMAIL');
         setStep('2fa');
       } else {
         login(result.user, result.token);
@@ -87,102 +84,53 @@ export function Login() {
             </motion.div>
           )}
 
-          {step === 'login' ? (
-            <form onSubmit={handleLogin} className="space-y-5">
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-2 uppercase tracking-wider">Email Address</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Mail className="h-5 w-5 text-slate-500" />
-                  </div>
-                  <input 
-                    type="email" 
-                    autoFocus
-                    required
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-3 border border-[#1e345e] bg-[#061121] rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-colors"
-                    placeholder="name@company.com"
-                  />
+          
+          <form onSubmit={handleLogin} className="space-y-5">
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-2 uppercase tracking-wider">Email Address</label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Mail className="h-5 w-5 text-slate-500" />
                 </div>
+                <input 
+                  type="email" 
+                  autoFocus
+                  required
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  className="block w-full pl-10 pr-3 py-3 border border-[#1e345e] bg-[#061121] rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-colors"
+                  placeholder="name@company.com"
+                />
               </div>
+            </div>
 
-              <div>
-                 <label className="block text-xs font-medium text-slate-400 mb-2 uppercase tracking-wider">Password</label>
-                 <div className="relative">
-                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                     <Lock className="h-5 w-5 text-slate-500" />
-                   </div>
-                   <input 
-                     type="password" 
-                     required
-                     value={password}
-                     onChange={e => setPassword(e.target.value)}
-                     className="block w-full pl-10 pr-3 py-3 border border-[#1e345e] bg-[#061121] rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-colors"
-                     placeholder="••••••••"
-                   />
+            <div>
+               <label className="block text-xs font-medium text-slate-400 mb-2 uppercase tracking-wider">Password</label>
+               <div className="relative">
+                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                   <Lock className="h-5 w-5 text-slate-500" />
                  </div>
-              </div>
+                 <input 
+                   type="password" 
+                   required
+                   value={password}
+                   onChange={e => setPassword(e.target.value)}
+                   className="block w-full pl-10 pr-3 py-3 border border-[#1e345e] bg-[#061121] rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-colors"
+                   placeholder="••••••••"
+                 />
+               </div>
+            </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-emerald-500 hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 focus:ring-offset-[#061121] transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-4 shadow-[0_0_20px_rgba(52,211,153,0.3)] hover:shadow-[0_0_30px_rgba(52,211,153,0.5)]"
-              >
-                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Continue'}
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handle2FA} className="space-y-5">
-              <div className="mb-4 text-sm text-slate-300 text-center">
-                {authMethod === 'STATIC' ? (
-                  isSetup 
-                    ? "Please set a new 6-digit authentication code to secure your account."
-                    : "Please enter your 6-digit authentication code to verify your identity."
-                ) : (
-                  "We've sent a 6-digit authentication code to your email. Please enter it below to verify your identity."
-                )}
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-2 uppercase tracking-wider">Authentication Code</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <KeyRound className="h-5 w-5 text-slate-500" />
-                  </div>
-                  <input 
-                    type="text" 
-                    autoFocus
-                    required
-                    value={twoFactorCode}
-                    onChange={e => setTwoFactorCode(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-3 border border-[#1e345e] bg-[#061121] rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-colors tracking-widest text-lg font-mono text-center"
-                    placeholder="000000"
-                    maxLength={6}
-                  />
-                </div>
-              </div>
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-emerald-500 hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 focus:ring-offset-[#061121] transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-4 shadow-[0_0_20px_rgba(52,211,153,0.3)] hover:shadow-[0_0_30px_rgba(52,211,153,0.5)]"
-              >
-                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (authMethod === 'STATIC' && isSetup ? 'Save & Access' : 'Verify Code & Access')}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setStep('login');
-                  setTwoFactorCode('');
-                  setError('');
-                }}
-                className="w-full text-sm text-slate-400 hover:text-white transition-colors"
-              >
-                Back to Login
-              </button>
-            </form>
-          )}
-
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-emerald-500 hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 focus:ring-offset-[#061121] transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-4 shadow-[0_0_20px_rgba(52,211,153,0.3)] hover:shadow-[0_0_30px_rgba(52,211,153,0.5)]"
+            >
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Continue'}
+            </button>
+          </form>
           <div className="mt-8 pt-6 border-t border-[#1e345e] text-center">
+
              <p className="text-sm text-slate-400">
                Need an account? <Link to="/signup" className="text-emerald-400 hover:text-emerald-300 font-medium">Request Access</Link>
              </p>
