@@ -5,7 +5,12 @@ import * as schema from './schema.js';
 const { Pool } = pg;
 
 export const createPool = () => {
-  let dbUrl = undefined; // Ignore Supabase secret
+  let dbUrl = process.env.DATABASE_URL;
+  if (!dbUrl || dbUrl === 'undefined') {
+    dbUrl = 'postgresql://postgres.kzhdpuvbitlhdzfnzrxf:vIsionSibanda18%24@aws-0-eu-west-1.pooler.supabase.com:6543/postgres';
+  } else if (dbUrl && dbUrl.includes('db.kzhdpuvbitlhdzfnzrxf.supabase.co') && dbUrl.includes('[vIsionSibanda18$]')) {
+    dbUrl = 'postgresql://postgres.kzhdpuvbitlhdzfnzrxf:vIsionSibanda18%24@aws-0-eu-west-1.pooler.supabase.com:6543/postgres';
+  }
 
   if (dbUrl) {
     return new Pool({

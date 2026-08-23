@@ -115,7 +115,12 @@ var systemLogs = pgTable("system_logs", {
 // src/db/index.ts
 var { Pool } = pg;
 var createPool = () => {
-  let dbUrl = void 0;
+  let dbUrl = process.env.DATABASE_URL;
+  if (!dbUrl || dbUrl === "undefined") {
+    dbUrl = "postgresql://postgres.kzhdpuvbitlhdzfnzrxf:vIsionSibanda18%24@aws-0-eu-west-1.pooler.supabase.com:6543/postgres";
+  } else if (dbUrl && dbUrl.includes("db.kzhdpuvbitlhdzfnzrxf.supabase.co") && dbUrl.includes("[vIsionSibanda18$]")) {
+    dbUrl = "postgresql://postgres.kzhdpuvbitlhdzfnzrxf:vIsionSibanda18%24@aws-0-eu-west-1.pooler.supabase.com:6543/postgres";
+  }
   if (dbUrl) {
     return new Pool({
       connectionString: dbUrl,

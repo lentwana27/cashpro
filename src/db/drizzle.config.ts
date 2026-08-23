@@ -8,7 +8,12 @@ const sqlDbName = process.env.SQL_DB_NAME;
 const user = process.env.SQL_ADMIN_USER;
 const password = process.env.SQL_ADMIN_PASSWORD;
 
-let dbUrl = undefined; // Force undefined to ignore Supabase secret
+let dbUrl = process.env.DATABASE_URL;
+  if (!dbUrl || dbUrl === 'undefined') {
+    dbUrl = 'postgresql://postgres.kzhdpuvbitlhdzfnzrxf:vIsionSibanda18%24@aws-0-eu-west-1.pooler.supabase.com:6543/postgres';
+  } else if (dbUrl && dbUrl.includes('db.kzhdpuvbitlhdzfnzrxf.supabase.co') && dbUrl.includes('[vIsionSibanda18$]')) {
+    dbUrl = 'postgresql://postgres.kzhdpuvbitlhdzfnzrxf:vIsionSibanda18%24@aws-0-eu-west-1.pooler.supabase.com:6543/postgres';
+  }
 
 if (!dbUrl && (!sqlHost || !sqlDbName || !user || !password)) {
   throw new Error("Missing database connection variables");
