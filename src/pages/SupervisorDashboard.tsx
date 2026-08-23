@@ -55,6 +55,20 @@ export function SupervisorDashboard() {
     }
   }, [quickLogs, quickLogKey]);
 
+  const handleClearPastData = async () => {
+    if (!confirm("Are you sure you want to clear all past cashup data for this branch? This action cannot be undone and will not affect user accounts.")) return;
+    try {
+      await api.delete(`/reconciliations/branch/${user?.branchId}`);
+      setHistory([]);
+      setSubmitted(null);
+      alert("Past data cleared successfully.");
+      loadData();
+    } catch(e) {
+      console.error(e);
+      alert("Failed to clear past data.");
+    }
+  };
+
   const loadData = async () => {
     try {
       const [ratesData, recsData, locsData] = await Promise.all([
@@ -156,19 +170,7 @@ export function SupervisorDashboard() {
   }, [history]);
 
   
-  const handleClearPastData = async () => {
-    if (!confirm("Are you sure you want to clear all past cashup data for this branch? This action cannot be undone and will not affect user accounts.")) return;
-    try {
-      await api.delete(`/reconciliations/branch/${user?.branchId}`);
-      setHistory([]);
-      setSubmitted(null);
-      alert("Past data cleared successfully.");
-      loadData();
-    } catch(e) {
-      console.error(e);
-      alert("Failed to clear past data.");
-    }
-  };
+
 
   const requestUnlock = async (dStr: string) => {
     try {
@@ -227,6 +229,12 @@ export function SupervisorDashboard() {
           >
             <Trash2 className="w-4 h-4" /> Clear Past Data
           </button>
+          <div className="flex items-center gap-2 px-4 py-2 bg-indigo-500/10 border border-indigo-500/30 rounded-lg">
+            <div className="w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-xs">
+              {user?.name?.charAt(0).toUpperCase()}
+            </div>
+            <span className="text-indigo-300 font-medium text-sm">{user?.name}</span>
+          </div>
           <input
             type="date"
             value={date}

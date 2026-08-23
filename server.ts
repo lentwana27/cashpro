@@ -67,9 +67,10 @@ api.post('/auth/signup', async (req, res) => {
     name,
     email,
     passwordHash: password,
+    twoFactorCode: null,
     role: role || 'SUPERVISOR',
     branchId: branchId || null,
-    active: true,
+    active: false,
     createdAt: new Date()
   };
   await db.insert(schema.users).values(user);
@@ -84,11 +85,43 @@ api.post('/auth/login', async (req, res) => {
   const users = await db.select().from(schema.users).where(eq(schema.users.email, email));
   const user = users[0];
   if (user && user.passwordHash === password) {
-    await db.update(schema.users).set({ isOnline: true, lastSeen: new Date().toISOString() }).where(eq(schema.users.id, user.id));
-    res.json({ user, token: 'fake-jwt-token-replace-later' });
+    if (!user.active) {
+      return res.status(401).json({ error: 'Account pending admin approval' });
+    }
+    const isSetup = !user.twoFactorCode;
+    res.json({ requires2FA: true, tempToken: user.id, isSetup });
   } else {
     res.status(401).json({ error: 'Invalid credentials' });
   }
+});
+
+api.post('/auth/verify-2fa', async (req, res) => {
+  const { tempToken, code } = req.body;
+  if (!tempToken || !code) {
+    return res.status(400).json({ error: 'Missing token or code' });
+  }
+  const users = await db.select().from(schema.users).where(eq(schema.users.id, tempToken));
+  const user = users[0];
+  if (!user) {
+    return res.status(401).json({ error: 'User not found' });
+  }
+  if (!user.active) {
+    return res.status(401).json({ error: 'Account pending admin approval' });
+  }
+  
+  if (!user.twoFactorCode) {
+    // First time setup
+    await db.update(schema.users).set({ twoFactorCode: code, isOnline: true, lastSeen: new Date().toISOString() }).where(eq(schema.users.id, user.id));
+    user.twoFactorCode = code;
+    return res.json({ user, token: 'fake-jwt-token-replace-later' });
+  }
+  
+  if (code !== user.twoFactorCode) {
+    return res.status(401).json({ error: 'Invalid 2FA code' });
+  }
+  
+  await db.update(schema.users).set({ isOnline: true, lastSeen: new Date().toISOString() }).where(eq(schema.users.id, user.id));
+  res.json({ user, token: 'fake-jwt-token-replace-later' });
 });
 
 api.post('/auth/logout', async (req, res) => {
