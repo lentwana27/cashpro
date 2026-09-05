@@ -4,6 +4,7 @@ import { AccountantDashboard } from './AccountantDashboard';
 import { DirectorDashboard } from './DirectorDashboard';
 import { SupervisorDashboard } from './SupervisorDashboard';
 import { AuditorDashboard } from './AuditorDashboard';
+import { CashierDashboard } from './CashierDashboard';
 
 export function DashboardRouter() {
   const { user } = useAuth();
@@ -20,6 +21,8 @@ export function DashboardRouter() {
       return <SupervisorDashboard />;
     case 'AUDITOR':
       return <AuditorDashboard />;
+    case 'CASHIER':
+      return <CashierDashboard />;
     default:
       return <div>Access Denied</div>;
   }

@@ -223,12 +223,14 @@ export function SupervisorDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <button 
-            onClick={handleClearPastData}
-            className="flex items-center gap-2 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 px-4 py-2 rounded-lg font-bold text-sm transition-colors"
-          >
-            <Trash2 className="w-4 h-4" /> Clear Past Data
-          </button>
+          {user?.role === 'ADMIN' && (
+            <button 
+              onClick={handleClearPastData}
+              className="flex items-center gap-2 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 px-4 py-2 rounded-lg font-bold text-sm transition-colors"
+            >
+              <Trash2 className="w-4 h-4" /> Clear Past Data
+            </button>
+          )}
           <div className="flex items-center gap-2 px-4 py-2 bg-indigo-500/10 border border-indigo-500/30 rounded-lg">
             <div className="w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-xs">
               {user?.name?.charAt(0).toUpperCase()}
@@ -799,8 +801,8 @@ function CashUpForm({
 
   const cashTillNames =
     branch?.hasTills && branch.tills?.length > 0
-      ? branch.tills.map((t: any) => `Cash: ${t.name}`)
-      : ["End of Day Physical Cash Counted"];
+      ? [...branch.tills.map((t: any) => `Cash: ${t.name}`), "Ecocash", "Bank Transfer"]
+      : ["End of Day Physical Cash Counted", "Ecocash", "Bank Transfer"];
 
   const [sales, setSales] = useState<ReconLineItem[]>(
     ensureArray(existingData?.totalSales, tillNames),

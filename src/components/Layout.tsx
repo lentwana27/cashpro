@@ -1,6 +1,6 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import { useAuth } from './AuthProvider';
-import { LogOut, LayoutDashboard, Building2, Users, FileText, Activity, UserSquare } from 'lucide-react';
+import { LogOut, LayoutDashboard, Building2, Users, FileText, Activity, UserSquare, Sun, Moon } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import clsx from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -11,6 +11,21 @@ export function Layout({ children }: { children: ReactNode }) {
   const location = useLocation();
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const [isLightMode, setIsLightMode] = useState(() => {
+    return localStorage.getItem('theme') === 'light';
+  });
+
+  useEffect(() => {
+    if (isLightMode) {
+      document.documentElement.classList.add('light');
+      localStorage.setItem('theme', 'light');
+    } else {
+      document.documentElement.classList.remove('light');
+      localStorage.setItem('theme', 'dark');
+    }
+  }, [isLightMode]);
+
 
   if (!user) return null;
 
@@ -73,7 +88,16 @@ export function Layout({ children }: { children: ReactNode }) {
                <div className="text-sm font-medium text-white">{user.name}</div>
                <div className="text-xs text-emerald-400 capitalize">{user.role.toLowerCase()}</div>
              </div>
-             <button 
+             
+             <button
+               onClick={() => setIsLightMode(!isLightMode)}
+               className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-[#112240] transition-colors mb-2"
+             >
+               {isLightMode ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+               <span className="font-medium">{isLightMode ? 'Dark Mode' : 'Light Mode'}</span>
+             </button>
+
+             <button
                onClick={logout}
                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
              >
