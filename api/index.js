@@ -318,6 +318,11 @@ api.get("/users", async (req, res) => {
   res.json(users2);
 });
 api.post("/users", async (req, res) => {
+  const { email } = req.body;
+  const existing = await db.select().from(users).where(eq(users.email, email));
+  if (existing.length > 0) {
+    return res.status(400).json({ error: "Email already in use" });
+  }
   const user = { ...req.body, id: uuidv4(), active: true };
   if (user.createdAt) {
     user.createdAt = new Date(user.createdAt);
@@ -329,6 +334,12 @@ api.post("/users", async (req, res) => {
 });
 api.put("/users/:id", async (req, res) => {
   const data = { ...req.body };
+  if (data.email) {
+    const existing = await db.select().from(users).where(eq(users.email, data.email));
+    if (existing.length > 0 && existing[0].id !== req.params.id) {
+      return res.status(400).json({ error: "Email already in use by another user" });
+    }
+  }
   if (data.createdAt) {
     delete data.createdAt;
   }
@@ -452,7 +463,7 @@ async function startServer() {
         await db.insert(exchangeRates).values([
           { id: "er-usd", currencyCode: "USD", rateToUsd: 1, effectiveDate: (/* @__PURE__ */ new Date()).toISOString() },
           { id: "er-zar", currencyCode: "ZAR", rateToUsd: 0.055, effectiveDate: (/* @__PURE__ */ new Date()).toISOString() },
-          { id: "er-zmw", currencyCode: "ZMW", rateToUsd: 0.037, effectiveDate: (/* @__PURE__ */ new Date()).toISOString() }
+          { id: "er-zig", currencyCode: "ZiG", rateToUsd: 0.037, effectiveDate: (/* @__PURE__ */ new Date()).toISOString() }
         ]);
       }
     } catch (e) {

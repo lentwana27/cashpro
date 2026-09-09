@@ -1,4 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+const fs = require('fs');
+let content = fs.readFileSync('src/pages/DashboardRouter.tsx', 'utf8');
+
+// I'll rewrite DashboardRouter to include a SupervisorWrapper
+content = `import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../components/AuthProvider';
 import { AdminDashboard } from './AdminDashboard';
 import { AccountantDashboard } from './AccountantDashboard';
@@ -66,7 +70,7 @@ function SupervisorWrapper() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="bg-[#061121] rounded-lg p-4 border border-[#1e345e]">
             <div className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Total Sales</div>
-            <div className="text-2xl font-black text-white">${stats.sales.toFixed(2)}</div>
+            <div className="text-2xl font-black text-white">\${stats.sales.toFixed(2)}</div>
           </div>
           <div className="bg-[#061121] rounded-lg p-4 border border-[#1e345e]">
             <div className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Total Variance</div>
@@ -106,3 +110,7 @@ export function DashboardRouter() {
       return <div>Access Denied</div>;
   }
 }
+`;
+
+fs.writeFileSync('src/pages/DashboardRouter.tsx', content);
+console.log('Patched DashboardRouter!');

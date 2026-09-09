@@ -25,9 +25,16 @@ export const api = {
       method: 'DELETE',
       headers: getHeaders(),
     });
+    
     if (!res.ok) {
-      throw new Error('Server error');
+      let msg = 'Server error';
+      try {
+        const data = await res.json();
+        if (data.error) msg = data.error;
+      } catch(e) {}
+      throw new Error(msg);
     }
+
     const textRes = await res.text();
     try { return JSON.parse(textRes); } catch(e) { return {}; }
   },

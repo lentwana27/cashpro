@@ -13,16 +13,20 @@ import {
   X,
   PlusCircle,
   Activity,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import clsx from "clsx";
 import { format } from "date-fns";
 
-export function SupervisorDashboard() {
+export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: string }) {
   const { user } = useAuth();
   const [rates, setRates] = useState<ExchangeRate[]>([]);
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [submitted, setSubmitted] = useState<DailyReconciliation | null>(null);
   const [history, setHistory] = useState<DailyReconciliation[]>([]);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [branch, setBranch] = useState<any>(null);
   const [branches, setBranches] = useState<any[]>([]);
   const [cashiers, setCashiers] = useState<any[]>([]);
@@ -30,6 +34,8 @@ export function SupervisorDashboard() {
   const [isEditing, setIsEditing] = useState(false);
   const [isCashUpMode, setIsCashUpMode] = useState(false);
   const [showQuickLog, setShowQuickLog] = useState(false);
+  const [showAmendModal, setShowAmendModal] = useState(false);
+  const [amendReason, setAmendReason] = useState("");
 
   const [qlCategory, setQlCategory] = useState("totalSales");
   const [qlDesc, setQlDesc] = useState("");
@@ -38,7 +44,7 @@ export function SupervisorDashboard() {
   const [qlCurr, setQlCurr] = useState("USD");
 
   const todayStr = format(new Date(), "yyyy-MM-dd");
-  const quickLogKey = `quick_logs_${user?.branchId}_${todayStr}`;
+  const quickLogKey = `quick_logs_${(branchIdOverride || user?.branchId)}_${todayStr}`;
   const [quickLogs, setQuickLogs] = useState<any[]>(() => {
     try {
       return JSON.parse(localStorage.getItem(quickLogKey) || "[]");
@@ -58,7 +64,7 @@ export function SupervisorDashboard() {
   const handleClearPastData = async () => {
     if (!confirm("Are you sure you want to clear all past cashup data for this branch? This action cannot be undone and will not affect user accounts.")) return;
     try {
-      await api.delete(`/reconciliations/branch/${user?.branchId}`);
+      await api.delete(`/reconciliations/branch/${(branchIdOverride || user?.branchId)}`);
       setHistory([]);
       setSubmitted(null);
       alert("Past data cleared successfully.");
@@ -74,19 +80,19 @@ export function SupervisorDashboard() {
       const [ratesData, recsData, locsData] = await Promise.all([
         api.get("/rates"),
         api.get("/reconciliations"),
-        user?.branchId ? api.get("/branches") : Promise.resolve([]),
+        (branchIdOverride || user?.branchId) ? api.get("/branches") : Promise.resolve([]),
       ]);
       setRates(ratesData);
             try {
         const u = await api.get('/users');
-        setCashiers(u.filter((x: any) => x.role === 'CASHIER' && x.branchId === user?.branchId));
+        setCashiers(u.filter((x: any) => x.role === 'CASHIER' && x.branchId === (branchIdOverride || user?.branchId)));
       } catch (e) {}
       
-      if (user?.branchId && locsData)
-        setBranch(locsData.find((b: any) => b.id === user.branchId));
+      if ((branchIdOverride || user?.branchId) && locsData)
+        setBranch(locsData.find((b: any) => b.id === (branchIdOverride || user?.branchId)));
 
       const branchRecs = recsData.filter(
-        (r: any) => r.branchId === user?.branchId,
+        (r: any) => r.branchId === (branchIdOverride || user?.branchId),
       );
       const todayRec = branchRecs.find((r: any) => r.date === date);
       setHistory(
@@ -106,9 +112,9 @@ export function SupervisorDashboard() {
     loadData();
     const interval = setInterval(loadData, 5000);
     return () => clearInterval(interval);
-  }, [date, user?.branchId]);
+  }, [date, (branchIdOverride || user?.branchId)]);
 
-  if (!user?.branchId)
+  if (!(branchIdOverride || user?.branchId))
     return <div>No branch assigned. Please contact Administrator.</div>;
 
   const handleEditClick = () => {
@@ -175,7 +181,7 @@ export function SupervisorDashboard() {
   const requestUnlock = async (dStr: string) => {
     try {
       await api.post("/reconciliations", {
-        branchId: user?.branchId,
+        branchId: (branchIdOverride || user?.branchId),
         supervisorId: user?.id,
         date: dStr,
         status: "UNLOCK_REQUESTED",
@@ -219,7 +225,7 @@ export function SupervisorDashboard() {
             Daily Cash-Up
           </h1>
           <p className="text-slate-400 text-sm mt-1">
-            Branch Code: {user?.branchId}
+            {branch?.name ? `Branch: ${branch.name}` : `Branch Code: ${(branchIdOverride || user?.branchId)}`}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -391,12 +397,7 @@ export function SupervisorDashboard() {
             </div>
           ) : (
             <button
-              onClick={async () => {
-                await api.put(`/reconciliations/${submitted.id}`, {
-                  status: "AMENDMENT_REQUESTED",
-                });
-                loadData();
-              }}
+              onClick={() => setShowAmendModal(true)}
               className="px-6 py-2 bg-[#112240] hover:bg-[#1a2d53] text-white border border-[#1e345e] rounded-lg transition-colors font-medium text-sm flex items-center justify-center gap-2 mx-auto"
             >
               Request to Amend
@@ -407,7 +408,7 @@ export function SupervisorDashboard() {
         <CashUpForm
           cashiers={cashiers}
           branch={branch}
-          branchId={user.branchId}
+          branchId={(branchIdOverride || user?.branchId)}
           supervisorId={user.id}
           date={date}
           rates={rates}
@@ -557,9 +558,11 @@ export function SupervisorDashboard() {
             </thead>
             <tbody className="divide-y divide-[#1e345e]">
               {history.map((r) => (
+                <React.Fragment key={r.id}>
                 <tr
                   key={r.id}
-                  className="hover:bg-[#112240]/50 transition-colors"
+                  onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
+                  className={clsx("transition-colors cursor-pointer", expandedId === r.id ? "bg-[#112240]" : "hover:bg-[#112240]/50")}
                 >
                   <td className="px-6 py-4 font-medium text-white">
                     {format(new Date(r.date), "MMM d, yyyy")}
@@ -618,6 +621,120 @@ export function SupervisorDashboard() {
                     </div>
                   </td>
                 </tr>
+                <AnimatePresence>
+                    {expandedId === r.id && (
+                      <motion.tr 
+                        initial={{ opacity: 0, height: 0 }} 
+                        animate={{ opacity: 1, height: 'auto' }} 
+                        exit={{ opacity: 0, height: 0 }}
+                        className="bg-[#061121]/50 shadow-inner"
+                      >
+                        <td colSpan={5} className="p-0 border-b border-[#1e345e]">
+                                  {(() => {
+                                  const getSum = (arr: any) => {
+                                    if (!arr) return 0;
+                                    if (Array.isArray(arr)) return arr.reduce((a,b)=>a+(b.usdEquivalent||0),0);
+                                    return arr.usdEquivalent||0;
+                                  };
+                                  const tSales = getSum(r.totalSales);
+                                  const tDeps = getSum(r.depositsReceived);
+                                  const totalIncome = tSales + tDeps;
+                                  
+                                  const tDebtors = getSum(r.debtors);
+                                  const tDepClaims = getSum(r.depositClaims);
+                                  const tRet = getSum(r.returnsRefunds);
+                                  const tExp = getSum(r.expenses);
+                                  const tPur = getSum(r.purchases);
+                                  const totalDeductions = tDebtors + tDepClaims + tRet + tExp + tPur;
+                                  
+                                  const expected = totalIncome - totalDeductions;
+                                  const actualCash = getSum(r.tillCashBreakdown);
+                                  const variance = actualCash - expected;
+                                  
+                                  return (
+                                    <>
+                                      <div className="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
+                                        <div>
+                                          <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-4 border-b-2 border-double border-[#1e345e] pb-2">Income breakdown</h4>
+                                          <div className="space-y-4">
+                                            <BreakdownSection title="Total Sales" items={r.totalSales} />
+                                            <BreakdownSection title="Deposits Received" items={r.depositsReceived} />
+                                          </div>
+                                          <div className="mt-4 pt-3 border-t-2 border-double border-emerald-500/30 flex justify-between font-bold text-sm text-emerald-400">
+                                            <span>Total Income</span>
+                                            <span className="font-mono">${totalIncome.toFixed(2)}</span>
+                                          </div>
+                                        </div>
+                                        
+                                        <div>
+                                          <h4 className="text-xs font-bold text-rose-400 uppercase tracking-wider mb-4 border-b-2 border-double border-[#1e345e] pb-2">Deductions breakdown</h4>
+                                          <div className="space-y-4">
+                                            <BreakdownSection title="Debtors (Credit Sales)" items={r.debtors} />
+                                            <BreakdownSection title="Deposit Claims" items={r.depositClaims} />
+                                            <BreakdownSection title="Returns / Refunds" items={r.returnsRefunds} />
+                                            <BreakdownSection title="Operational Expenses" items={r.expenses} />
+                                            <BreakdownSection title="Purchases" items={r.purchases} />
+                                          </div>
+                                          <div className="mt-4 pt-3 border-t-2 border-double border-rose-500/30 flex justify-between font-bold text-sm text-rose-400">
+                                            <span>Total Deductions</span>
+                                            <span className="font-mono">${totalDeductions.toFixed(2)}</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      
+                                      <div className="bg-[#0a192f] p-4 sm:p-6 border-t border-[#1e345e] grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
+                                        <div>
+                                          <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">Expected Cash</div>
+                                          <div className="text-2xl font-mono text-white">${expected.toFixed(2)}</div>
+                                        </div>
+                                        <div>
+                                          <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">Physical Cash Counted</div>
+                                          <div className="text-2xl font-mono text-white">${actualCash.toFixed(2)}</div>
+                                        </div>
+                                        <div>
+                                          <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">Variance</div>
+                                          <div className={clsx("text-2xl font-mono font-bold", variance > 0 ? "text-emerald-400" : variance < 0 ? "text-rose-400" : "text-slate-300")}>
+                                            {variance > 0 ? '+' : ''}{variance.toFixed(2)}
+                                          </div>
+                                        </div>
+                                      </div>
+                                      
+                                      {(r.notes || r.signature || (r.amendmentNotes && r.amendmentNotes.length > 0)) && (
+                                        <div className="px-6 pb-6 mt-2 border-t border-[#1e345e] pt-6">
+                                          <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-[#1e345e] pb-2">Notes & Verification</h4>
+                                          {r.amendmentNotes && r.amendmentNotes.length > 0 && (
+                                            <div className="mb-4 space-y-2">
+                                              <p className="text-xs text-slate-500 mb-1">Amendment History</p>
+                                              {r.amendmentNotes.map((note: string, i: number) => (
+                                                <div key={i} className="text-sm text-yellow-500/90 bg-yellow-500/10 p-3 rounded-lg border border-yellow-500/20 leading-relaxed font-medium">
+                                                  {note}
+                                                </div>
+                                              ))}
+                                            </div>
+                                          )}
+                                          {r.notes && (
+                                            <div className="mb-4">
+                                              <p className="text-xs text-slate-500 mb-1">Additional Notes</p>
+                                              <p className="text-sm text-slate-300 bg-[#061121] p-3 rounded-lg border border-[#1e345e]">{r.notes}</p>
+                                            </div>
+                                          )}
+                                          {r.signature && (
+                                            <div>
+                                              <p className="text-xs text-slate-500 mb-1">Digitally Signed By</p>
+                                              <p className="text-lg text-emerald-400 font-serif italic">{r.signature}</p>
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </>
+
+                                  );
+                                })()}
+                        </td>
+                      </motion.tr>
+                    )}
+                  </AnimatePresence>
+                </React.Fragment>
               ))}
               {history.length === 0 && (
                 <tr>
@@ -638,6 +755,54 @@ export function SupervisorDashboard() {
       
       {history.length > 0 && (
          <CashierPerformance reconciliations={history} branches={branches} />
+      )}
+            {showAmendModal && submitted && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl w-full max-w-sm p-4 sm:p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-bold text-white mb-4">
+              Reason for Amendment
+            </h3>
+            <p className="text-sm text-slate-400 mb-4">
+              Please provide a detailed reason for requesting an amendment. This will be visible to Accountants and Auditors.
+            </p>
+            <textarea
+              value={amendReason}
+              onChange={(e) => setAmendReason(e.target.value)}
+              className="w-full bg-[#061121] border border-[#1e345e] rounded-lg p-3 text-white text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 min-h-[100px] mb-4"
+              placeholder="E.g., Forgot to log $50 expenses..."
+            />
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowAmendModal(false);
+                  setAmendReason("");
+                }}
+                className="px-4 py-2 text-slate-400 hover:text-white transition-colors text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={!amendReason.trim()}
+                onClick={async () => {
+                  const timestamp = new Date().toLocaleString();
+                  const note = `[${timestamp}] Amendment Requested: ${amendReason}`;
+                  const updatedNotes = submitted.amendmentNotes ? [...submitted.amendmentNotes, note] : [note];
+                  
+                  await api.put(`/reconciliations/${submitted.id}`, {
+                    status: "AMENDMENT_REQUESTED",
+                    amendmentNotes: updatedNotes
+                  });
+                  setShowAmendModal(false);
+                  setAmendReason("");
+                  loadData();
+                }}
+                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:hover:bg-emerald-500 text-white rounded-lg transition-colors text-sm font-medium"
+              >
+                Submit Request
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {/* Quick Log Modal */}
       {showQuickLog && (
@@ -1516,11 +1681,20 @@ function MissingSalesForm({ recon, rates, branch, cashiers, onCancel, onSuccess 
                       const newVars = [...tillVariances];
                       newVars[idx].cashierId = e.target.value;
                       setTillVariances(newVars);
+                      if (e.target.value === 'none') {
+                        const newSales = [...sales];
+                        if (newSales[idx]) {
+                          newSales[idx].amount = 0;
+                          newSales[idx].usdEquivalent = 0;
+                          setSales(newSales);
+                        }
+                      }
                     }}
                     className="w-full bg-[#061121] border border-[#1e345e] rounded-lg p-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
                     required
                   >
                     <option value="">Select Cashier for {tv.tillName}...</option>
+                    <option value="none">None - Not Working</option>
                     {cashiers.map((c: any) => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
@@ -1538,6 +1712,7 @@ function MissingSalesForm({ recon, rates, branch, cashiers, onCancel, onSuccess 
           setItems={setSales}
           currencies={currencies}
           getUsd={getUsd}
+          hiddenIndices={tillVariances.map((tv, i) => tv.cashierId === 'none' ? i : -1).filter(i => i !== -1)}
         />
 
         <div className="flex justify-end gap-4 mt-8 pt-6 border-t border-[#1e345e]">
@@ -1643,7 +1818,8 @@ function PhysicalCashListField({
   setItems,
   getUsd,
   showCashierName,
-  cashiers = []
+  cashiers = [],
+  hiddenIndices = []
 }: any) {
   const createItem = (desc: string) => ({
     id: Math.random().toString(),
@@ -1674,7 +1850,9 @@ function PhysicalCashListField({
             No records.
           </div>
         )}
-        {items.map((item: any, idx: number) => (
+        {items.map((item: any, idx: number) => {
+          if (hiddenIndices && hiddenIndices.includes(idx)) return null;
+          return (
           <div
             key={item.id || idx}
             className="flex flex-col sm:flex-row gap-4 sm:items-end bg-[#112240] p-4 rounded-xl border border-[#1e345e]"
@@ -1703,12 +1881,17 @@ function PhysicalCashListField({
                     const newArr = [...items];
                     newArr[idx].cashierId = e.target.value;
                     const c = cashiers.find((x: any) => x.id === e.target.value);
-                    newArr[idx].cashierName = c ? c.name : "";
+                    newArr[idx].cashierName = c ? c.name : (e.target.value === 'none' ? 'None' : '');
+                    if (e.target.value === 'none') {
+                      newArr[idx].amount = 0;
+                      newArr[idx].usdEquivalent = 0;
+                    }
                     setItems(newArr);
                   }}
                   className="w-full bg-[#061121] text-xs text-blue-300 focus:outline-none mb-2 border border-[#1e345e] p-1.5 rounded"
                 >
                   <option value="">Select Till Operator...</option>
+                  <option value="none">None - Not Working</option>
                   {cashiers.map((c: any) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
@@ -1792,7 +1975,8 @@ function PhysicalCashListField({
               </button>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -1806,7 +1990,8 @@ function ReconListField({
   currencies,
   getUsd,
   showCashierName,
-  cashiers = []
+  cashiers = [],
+  hiddenIndices = []
 }: any) {
   const createItem = (desc: string) => ({
     id: Math.random().toString(),
@@ -1836,7 +2021,9 @@ function ReconListField({
             No records.
           </div>
         )}
-        {items.map((item: any, idx: number) => (
+        {items.map((item: any, idx: number) => {
+          if (hiddenIndices && hiddenIndices.includes(idx)) return null;
+          return (
           <div
             key={item.id || idx}
             className="flex flex-col sm:flex-row gap-4 sm:items-end bg-[#112240] p-4 rounded-xl border border-[#1e345e]"
@@ -1954,7 +2141,8 @@ function ReconListField({
               </button>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
       {items.length > 0 && (
         <div className="text-right text-sm text-slate-400 mt-2 px-2 border-t border-[#1e345e] pt-2">
@@ -2017,3 +2205,30 @@ function PreviewList({ title, items }: { title: string; items: any[] }) {
     </div>
   );
 }
+
+
+const BreakdownSection = ({ title, items }: { title: string, items: any }) => {
+  const arr = Array.isArray(items) ? items : items ? [items] : [];
+  if (arr.length === 0) return null;
+  const total = arr.reduce((a:number,b:any)=>a+(b.usdEquivalent||0), 0);
+  
+  return (
+    <div className="mb-4">
+      <div className="flex justify-between font-medium text-slate-300 text-sm mb-2">
+        <span>{title}</span>
+        <span className="font-mono text-white">${total.toFixed(2)}</span>
+      </div>
+      <div className="space-y-1.5 border-l-2 border-[#1e345e] ml-1 pl-3">
+        {arr.map((item: any, idx: number) => (
+          <div key={idx} className="flex justify-between text-xs">
+            <span className="text-slate-400">
+              {item.description || 'Unnamed'} 
+              {(item.amount || item.amount === 0) && <span className="text-slate-500 ml-1">({item.amount} {item.currencyCode})</span>}
+            </span>
+            <span className="text-slate-300 font-mono">${(item.usdEquivalent||0).toFixed(2)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};

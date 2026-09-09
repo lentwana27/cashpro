@@ -4,7 +4,7 @@ import { api } from '../lib/api';
 import { DailyReconciliation, Branch } from '../lib/types';
 import { CashierPerformance } from '../components/CashierPerformance';
 import { CashierShortageChart } from '../components/CashierShortageChart';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 import clsx from 'clsx';
 import { format } from 'date-fns';
 import * as XLSX from 'xlsx';
@@ -401,7 +401,7 @@ export function DirectorDashboard() {
         <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl p-4 sm:p-6 shadow-xl w-full">
           <h2 className="text-lg font-semibold text-white mb-6">Sales Trend</h2>
           <div className="w-full">
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer minWidth={0} minHeight={0} width="100%" height={300}>
               <AreaChart data={charData}>
                 <defs>
                   <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
@@ -422,13 +422,17 @@ export function DirectorDashboard() {
         <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl p-4 sm:p-6 shadow-xl w-full">
           <h2 className="text-lg font-semibold text-white mb-6">Variance Tracking</h2>
           <div className="w-full">
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer minWidth={0} minHeight={0} width="100%" height={300}>
               <BarChart data={charData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e345e" vertical={false} />
                 <XAxis dataKey="date" stroke="#64748b" tickFormatter={str => format(new Date(str), 'MMM d')} />
                 <YAxis stroke="#64748b" />
                 <Tooltip contentStyle={{ backgroundColor: '#0a192f', borderColor: '#1e345e', color: '#f8fafc' }} cursor={{fill: '#112240'}} />
-                <Bar dataKey="variance" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="variance" name="Variance (USD)" radius={[4, 4, 0, 0]}>
+                  {charData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.variance > 0 ? '#10b981' : entry.variance < 0 ? '#f43f5e' : '#64748b'} />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>

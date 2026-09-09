@@ -10,14 +10,16 @@ export function CashierPerformance({ reconciliations, branches }: { reconciliati
   const [selectedCashier, setSelectedCashier] = useState<{id: string, name: string} | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const cashierStats = useMemo(() => {
-    const stats: Record<string, { id: string, name: string, sales: number, cash: number, variance: number, totalOvers: number, totalUnders: number, counts: number }> = {};
+    const stats: Record<string, { id: string, name: string, branchName: string, sales: number, cash: number, variance: number, totalOvers: number, totalUnders: number, counts: number }> = {};
     
     reconciliations.forEach(r => {
       if (r.tillVariances && Array.isArray(r.tillVariances)) {
         r.tillVariances.forEach(tv => {
           if (!tv.cashierId) return;
+          const b = branches.find(b => b.id === r.branchId);
+          const bName = b ? b.name : 'Unknown';
           if (!stats[tv.cashierId]) {
-            stats[tv.cashierId] = { id: tv.cashierId, name: tv.cashierName || 'Unknown', sales: 0, cash: 0, variance: 0, totalOvers: 0, totalUnders: 0, counts: 0 };
+            stats[tv.cashierId] = { id: tv.cashierId, name: tv.cashierName || 'Unknown', branchName: bName, sales: 0, cash: 0, variance: 0, totalOvers: 0, totalUnders: 0, counts: 0 };
           }
           stats[tv.cashierId].sales += (tv.expected || 0);
           stats[tv.cashierId].cash += (tv.actual || 0);
@@ -58,6 +60,7 @@ export function CashierPerformance({ reconciliations, branches }: { reconciliati
             <thead className="bg-[#112240] text-slate-400 border-b border-[#1e345e]">
               <tr>
                 <th className="px-6 py-4 font-medium">Cashier Name</th>
+                <th className="px-6 py-4 font-medium">Branch</th>
                 <th className="px-6 py-4 font-medium text-right">Shifts/Tills Manned</th>
                 <th className="px-6 py-4 font-medium text-right">Total Expected Sales (USD)</th>
                 <th className="px-6 py-4 font-medium text-right">Total Actual Cash (USD)</th>
@@ -71,6 +74,7 @@ export function CashierPerformance({ reconciliations, branches }: { reconciliati
                 <tr key={idx} className="hover:bg-[#1e345e] transition-colors cursor-pointer" onClick={() => setSelectedCashier({ id: c.id, name: c.name })}>
 
                   <td className="px-6 py-4 font-bold text-white">{c.name}</td>
+                  <td className="px-6 py-4 text-slate-300">{c.branchName}</td>
                   <td className="px-6 py-4 text-right text-slate-400">{c.counts}</td>
                   <td className="px-6 py-4 text-right font-mono text-slate-300">${c.sales.toFixed(2)}</td>
                   <td className="px-6 py-4 text-right font-mono text-slate-300">${c.cash.toFixed(2)}</td>

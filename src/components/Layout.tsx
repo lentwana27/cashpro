@@ -5,12 +5,24 @@ import { Link, useLocation } from 'react-router-dom';
 import clsx from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChatWidget } from './ChatWidget';
+import { api } from '../lib/api';
 
 export function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const location = useLocation();
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+    const [userBranch, setUserBranch] = useState<any>(null);
+  
+  useEffect(() => {
+    if (user?.branchId) {
+      api.get('/branches').then(res => {
+        const branch = res.data.find((b: any) => b.id === user.branchId);
+        if (branch) setUserBranch(branch);
+      }).catch(console.error);
+    }
+  }, [user]);
 
   const [isLightMode, setIsLightMode] = useState(() => {
     return localStorage.getItem('theme') === 'light';
@@ -191,6 +203,21 @@ export function Layout({ children }: { children: ReactNode }) {
       <main className="flex-1 overflow-y-auto relative z-10 w-full overflow-x-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-[#112240]/40 via-transparent to-transparent pointer-events-none" />
         <div className="p-4 md:p-8 max-w-7xl mx-auto min-h-full relative z-10">
+          {user && (
+            <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between bg-[#112240] p-4 rounded-xl border border-[#1e345e] shadow-sm">
+              <div>
+                <h2 className="text-lg font-bold text-white">Welcome, {user.name}</h2>
+                <p className="text-sm text-emerald-400 capitalize">{user.role.replace('_', ' ').toLowerCase()}</p>
+              </div>
+              {userBranch && (
+                <div className="mt-2 sm:mt-0 text-left sm:text-right">
+                  <div className="text-xs text-slate-400 uppercase tracking-wider">Current Branch</div>
+                  <div className="text-sm font-medium text-white">{userBranch.name}</div>
+                </div>
+              )}
+            </div>
+          )}
+
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}

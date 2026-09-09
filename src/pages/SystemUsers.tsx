@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { User } from '../lib/types';
-import { Users, AlertTriangle, Send, X, ShieldCheck } from 'lucide-react';
+import { Users, AlertTriangle, Send, X, ShieldCheck, ShieldAlert } from 'lucide-react';
 import clsx from 'clsx';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../components/AuthProvider';
@@ -76,6 +76,17 @@ export function SystemUsers() {
     }
   };
 
+
+  const handleTransferToAudit = async (id: string) => {
+    if (!confirm('Are you sure you want to transfer this user to Audit (change role to AUDITOR)?')) return;
+    try {
+      await api.put(`/users/${id}`, { role: 'AUDITOR' });
+      loadUsersAndBranches();
+    } catch (e: any) {
+      alert(e.message || 'Failed to transfer user');
+    }
+  };
+
   const handleDeleteUser = async (id: string) => {
     if (!confirm('Are you sure you want to delete this user?')) return;
     try {
@@ -117,7 +128,7 @@ export function SystemUsers() {
           <h1 className="text-3xl font-bold text-white tracking-tight">System Users</h1>
           <p className="text-slate-400 mt-1">Manage users, till operators, and access.</p>
         </div>
-        {currentUser?.role === 'ADMIN' && (
+        {(currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPERVISOR') && (
           <button 
             onClick={() => {
               setEditUser({ role: 'CASHIER', active: true });
@@ -185,7 +196,7 @@ export function SystemUsers() {
                     </td>
                     
                     <td className="px-6 py-4 text-right">
-                      {currentUser?.role === 'ADMIN' && (
+                      {(currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPERVISOR') && (
                         <>
                           <button 
                             onClick={() => {
@@ -197,6 +208,14 @@ export function SystemUsers() {
                             title="Edit User"
                           >
                             <Pencil className="w-4 h-4" />
+                          </button>
+
+                          <button 
+                            onClick={() => handleTransferToAudit(u.id)}
+                            className="p-1.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 rounded-lg mr-2 transition-colors"
+                            title="Transfer to Audit"
+                          >
+                            <ShieldAlert className="w-4 h-4" />
                           </button>
                           <button 
                             onClick={() => handleDeleteUser(u.id)}
@@ -337,11 +356,15 @@ export function SystemUsers() {
                 >
                   <option value="CASHIER">Till Operator (Cashier)</option>
                   <option value="SUPERVISOR">Supervisor</option>
-                  <option value="ACCOUNTANT">Accountant</option>
-                  <option value="HEAD_ACCOUNTANT">Head Accountant</option>
-                  <option value="AUDITOR">Auditor</option>
-                  <option value="DIRECTOR">Director</option>
-                  <option value="ADMIN">Admin</option>
+                  {currentUser?.role === 'ADMIN' && (
+                    <>
+                      <option value="ACCOUNTANT">Accountant</option>
+                      <option value="HEAD_ACCOUNTANT">Head Accountant</option>
+                      <option value="AUDITOR">Auditor</option>
+                      <option value="DIRECTOR">Director</option>
+                      <option value="ADMIN">Admin</option>
+                    </>
+                  )}
                 </select>
               </div>
               <div>

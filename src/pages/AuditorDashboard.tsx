@@ -192,75 +192,108 @@ export function AuditorDashboard() {
                     </td>
                   </tr>
                   {expandedId === r.id && (
-                    <tr>
+                    <tr className="bg-[#061121]/50 shadow-inner">
                       <td colSpan={8} className="p-0 border-b border-[#1e345e]">
-                        <div className="bg-[#061121] p-4 sm:p-6 shadow-inner border-y border-[#0a192f]">
-                          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-                            <PreviewSection title="Income" items={[
-                              { label: 'Total Sales', value: getSum(r.totalSales) },
-                              { label: 'Deposits Received', value: getSum(r.depositsReceived) }
-                            ]} />
-                            <PreviewSection title="Deductions" items={[
-                              { label: 'Debtors', value: getSum(r.debtors) },
-                              { label: 'Returns', value: getSum(r.returnsRefunds) },
-                              { label: 'Purchases', value: getSum(r.purchases) },
-                              { label: 'Expenses', value: getSum(r.expenses) }
-                            ]} />
-                            <div className="col-span-2 lg:col-span-4 mt-6">
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Line Item Notes</h4>
-                                  <div className="space-y-4">
-                                    {['expenses', 'purchases', 'totalSales'].map(category => {
-                                      // @ts-ignore
-                                      const items = Array.isArray(r[category]) ? r[category] : [r[category]].filter(Boolean);
-                                      const describedItems = items.filter((i: any) => i && i.description);
-                                      if (describedItems.length === 0) return null;
-                                      return (
-                                        <div key={category} className="bg-[#112240] p-3 rounded-lg border border-[#1e345e]">
-                                          <div className="text-xs font-bold text-white capitalize mb-2">{category.replace(/([A-Z])/g, ' $1').trim()}</div>
-                                          <ul className="space-y-1">
-                                            {describedItems.map((i: any, idx: number) => (
-                                              <li key={idx} className="flex justify-between text-xs">
-                                                <span className="text-slate-400">{i.description} {i.invoiceNumber && `(Inv: ${i.invoiceNumber})`}</span>
-                                                <span className="text-white">${(i.usdEquivalent || 0).toFixed(2)}</span>
-                                              </li>
-                                            ))}
-                                          </ul>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                                <div>
-                                  {(r.notes || r.amendmentNotes) && (
+                                  {(() => {
+                                  const getSum = (arr: any) => {
+                                    if (!arr) return 0;
+                                    if (Array.isArray(arr)) return arr.reduce((a,b)=>a+(b.usdEquivalent||0),0);
+                                    return arr.usdEquivalent||0;
+                                  };
+                                  const tSales = getSum(r.totalSales);
+                                  const tDeps = getSum(r.depositsReceived);
+                                  const totalIncome = tSales + tDeps;
+                                  
+                                  const tDebtors = getSum(r.debtors);
+                                  const tDepClaims = getSum(r.depositClaims);
+                                  const tRet = getSum(r.returnsRefunds);
+                                  const tExp = getSum(r.expenses);
+                                  const tPur = getSum(r.purchases);
+                                  const totalDeductions = tDebtors + tDepClaims + tRet + tExp + tPur;
+                                  
+                                  const expected = totalIncome - totalDeductions;
+                                  const actualCash = getSum(r.tillCashBreakdown);
+                                  const variance = actualCash - expected;
+                                  
+                                  return (
                                     <>
-                                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Logs & Verification</h4>
-                                      {r.amendmentNotes && r.amendmentNotes.length > 0 && (
-                                        <div className="mb-4 space-y-2">
-                                          <div className="text-xs text-slate-500 mb-1">Amendment History</div>
-                                          {r.amendmentNotes.map((note: string, idx: number) => (
-                                            <div key={idx} className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-500/90 p-3 rounded-lg text-sm leading-relaxed font-medium">
-                                              {note}
-                                            </div>
-                                          ))}
-                                        </div>
-                                      )}
-                                      {r.notes && (
-                                        <div className="mb-4">
-                                          <div className="text-xs text-slate-500 mb-1">Supervisor Notes</div>
-                                          <div className="bg-[#112240] p-3 rounded-lg border border-[#1e345e] text-sm text-slate-300">
-                                            {r.notes}
+                                      <div className="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
+                                        <div>
+                                          <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-4 border-b-2 border-double border-[#1e345e] pb-2">Income breakdown</h4>
+                                          <div className="space-y-4">
+                                            <BreakdownSection title="Total Sales" items={r.totalSales} />
+                                            <BreakdownSection title="Deposits Received" items={r.depositsReceived} />
                                           </div>
+                                          <div className="mt-4 pt-3 border-t-2 border-double border-emerald-500/30 flex justify-between font-bold text-sm text-emerald-400">
+                                            <span>Total Income</span>
+                                            <span className="font-mono">${totalIncome.toFixed(2)}</span>
+                                          </div>
+                                        </div>
+                                        
+                                        <div>
+                                          <h4 className="text-xs font-bold text-rose-400 uppercase tracking-wider mb-4 border-b-2 border-double border-[#1e345e] pb-2">Deductions breakdown</h4>
+                                          <div className="space-y-4">
+                                            <BreakdownSection title="Debtors (Credit Sales)" items={r.debtors} />
+                                            <BreakdownSection title="Deposit Claims" items={r.depositClaims} />
+                                            <BreakdownSection title="Returns / Refunds" items={r.returnsRefunds} />
+                                            <BreakdownSection title="Operational Expenses" items={r.expenses} />
+                                            <BreakdownSection title="Purchases" items={r.purchases} />
+                                          </div>
+                                          <div className="mt-4 pt-3 border-t-2 border-double border-rose-500/30 flex justify-between font-bold text-sm text-rose-400">
+                                            <span>Total Deductions</span>
+                                            <span className="font-mono">${totalDeductions.toFixed(2)}</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      
+                                      <div className="bg-[#0a192f] p-4 sm:p-6 border-t border-[#1e345e] grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
+                                        <div>
+                                          <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">Expected Cash</div>
+                                          <div className="text-2xl font-mono text-white">${expected.toFixed(2)}</div>
+                                        </div>
+                                        <div>
+                                          <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">Physical Cash Counted</div>
+                                          <div className="text-2xl font-mono text-white">${actualCash.toFixed(2)}</div>
+                                        </div>
+                                        <div>
+                                          <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">Variance</div>
+                                          <div className={"text-2xl font-mono font-bold " + (variance > 0 ? "text-emerald-400" : variance < 0 ? "text-rose-400" : "text-slate-300")}>
+                                            {variance > 0 ? '+' : ''}{variance.toFixed(2)}
+                                          </div>
+                                        </div>
+                                      </div>
+                                      
+                                      {(r.notes || r.signature || (r.amendmentNotes && r.amendmentNotes.length > 0)) && (
+                                        <div className="px-6 pb-6 mt-2 border-t border-[#1e345e] pt-6">
+                                          <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-[#1e345e] pb-2">Notes & Verification</h4>
+                                          {r.amendmentNotes && r.amendmentNotes.length > 0 && (
+                                            <div className="mb-4 space-y-2">
+                                              <p className="text-xs text-slate-500 mb-1">Amendment History</p>
+                                              {r.amendmentNotes.map((note: string, i: number) => (
+                                                <div key={i} className="text-sm text-yellow-500/90 bg-yellow-500/10 p-3 rounded-lg border border-yellow-500/20 leading-relaxed font-medium">
+                                                  {note}
+                                                </div>
+                                              ))}
+                                            </div>
+                                          )}
+                                          {r.notes && (
+                                            <div className="mb-4">
+                                              <p className="text-xs text-slate-500 mb-1">Additional Notes</p>
+                                              <p className="text-sm text-slate-300 bg-[#061121] p-3 rounded-lg border border-[#1e345e]">{r.notes}</p>
+                                            </div>
+                                          )}
+                                          {r.signature && (
+                                            <div>
+                                              <p className="text-xs text-slate-500 mb-1">Digitally Signed By</p>
+                                              <p className="text-lg text-emerald-400 font-serif italic">{r.signature}</p>
+                                            </div>
+                                          )}
                                         </div>
                                       )}
                                     </>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+
+                                  );
+                                })()}
                       </td>
                     </tr>
                   )}
@@ -299,3 +332,29 @@ function PreviewSection({ title, items }: { title: string, items: {label: string
     </div>
   );
 }
+
+const BreakdownSection = ({ title, items }: { title: string, items: any }) => {
+  const arr = Array.isArray(items) ? items : items ? [items] : [];
+  if (arr.length === 0) return null;
+  const total = arr.reduce((a:number,b:any)=>a+(b.usdEquivalent||0), 0);
+  
+  return (
+    <div className="mb-4">
+      <div className="flex justify-between font-medium text-slate-300 text-sm mb-2">
+        <span>{title}</span>
+        <span className="font-mono text-white">$${total.toFixed(2)}</span>
+      </div>
+      <div className="space-y-1.5 border-l-2 border-[#1e345e] ml-1 pl-3">
+        {arr.map((item: any, idx: number) => (
+          <div key={idx} className="flex justify-between text-xs">
+            <span className="text-slate-400">
+              {item.description || 'Unnamed'} 
+              {(item.amount || item.amount === 0) && <span className="text-slate-500 ml-1">({item.amount} {item.currencyCode})</span>}
+            </span>
+            <span className="text-slate-300 font-mono">$${(item.usdEquivalent||0).toFixed(2)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { User, Branch, SystemLog } from '../lib/types';
-import { Users, Building2, CheckCircle, ShieldCheck, MapPin, Edit3, X, Download, Database, Activity, Plus } from 'lucide-react';
+import { Users, Building2, CheckCircle, ShieldCheck, MapPin, Edit3, X, Download, Database, Activity, Plus, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
 import { format } from 'date-fns';
 
@@ -51,6 +51,17 @@ export function AdminDashboard() {
   const unlockSales = async (id: string) => {
     await api.put(`/reconciliations/${id}`, { salesConfirmed: false });
     loadData();
+  };
+
+  
+  const handleDeleteUser = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this user?')) return;
+    try {
+      await api.delete(`/users/${id}`);
+      loadData();
+    } catch (e: any) {
+      alert(e.message || 'Failed to delete user');
+    }
   };
 
   const approveUser = async (id: string) => {
@@ -171,7 +182,7 @@ export function AdminDashboard() {
                   <div className="text-xs text-slate-500 mt-0.5">{u.email}</div>
                   <div className="flex gap-2 mt-2">
                     <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded text-[10px] font-bold uppercase tracking-wider">{u.role}</span>
-                    {u.branchId && <span className="px-2 py-0.5 bg-slate-800 text-slate-400 rounded text-[10px] font-medium">{u.branchId}</span>}
+                    {u.branchId && <span className="px-2 py-0.5 bg-slate-800 text-slate-400 rounded text-[10px] font-medium">{branches.find(b => b.id === u.branchId)?.name || u.branchId}</span>}
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-2">
@@ -195,6 +206,14 @@ export function AdminDashboard() {
                     >
                       <Edit3 className="w-4 h-4" />
                     </button>
+                    <button 
+                      onClick={() => handleDeleteUser(u.id)}
+                      className="p-1.5 text-slate-400 hover:text-rose-400 bg-[#0a192f] hover:bg-rose-500/10 rounded-lg transition-colors border border-[#1e345e]"
+                      title="Delete User"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+
                   </div>
                   {u.lastSeen && !u.isOnline && (
                     <div className="text-[10px] text-slate-500">

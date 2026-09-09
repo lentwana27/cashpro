@@ -12,7 +12,7 @@ export function CashierMonthlyPerformance({ reconciliations, branches }: { recon
   const [selectedMonth, setSelectedMonth] = useState<string>(format(new Date(), 'yyyy-MM'));
 
   const monthlyStats = useMemo(() => {
-    const stats: Record<string, { id: string, name: string, overUSD: number, underUSD: number, overZAR: number, underZAR: number }> = {};
+    const stats: Record<string, { id: string, name: string, branchName: string, overUSD: number, underUSD: number, overZAR: number, underZAR: number }> = {};
     
     reconciliations.forEach(r => {
       const rMonth = r.date.substring(0, 7); // yyyy-MM
@@ -21,8 +21,10 @@ export function CashierMonthlyPerformance({ reconciliations, branches }: { recon
       if (r.tillVariances && Array.isArray(r.tillVariances)) {
         r.tillVariances.forEach(tv => {
           if (!tv.cashierId) return;
+          const b = branches.find(b => b.id === r.branchId);
+          const bName = b ? b.name : 'Unknown';
           if (!stats[tv.cashierId]) {
-            stats[tv.cashierId] = { id: tv.cashierId, name: tv.cashierName || 'Unknown', overUSD: 0, underUSD: 0, overZAR: 0, underZAR: 0 };
+            stats[tv.cashierId] = { id: tv.cashierId, name: tv.cashierName || 'Unknown', branchName: bName, overUSD: 0, underUSD: 0, overZAR: 0, underZAR: 0 };
           }
           
           const v = tv.variance || 0;
@@ -80,6 +82,7 @@ export function CashierMonthlyPerformance({ reconciliations, branches }: { recon
             <thead className="bg-[#112240] text-slate-400 border-b border-[#1e345e]">
               <tr>
                 <th className="px-6 py-4 font-medium" rowSpan={2}>Cashier Name</th>
+                <th className="px-6 py-4 font-medium" rowSpan={2}>Branch</th>
                 <th className="px-6 py-2 font-medium text-center border-b border-[#1e345e]" colSpan={2}>USD Variances</th>
                 <th className="px-6 py-2 font-medium text-center border-b border-[#1e345e] border-l" colSpan={2}>ZAR Variances</th>
               </tr>
@@ -101,6 +104,7 @@ export function CashierMonthlyPerformance({ reconciliations, branches }: { recon
                 <tr key={idx} className="hover:bg-[#1e345e] transition-colors cursor-pointer" onClick={() => setSelectedCashier({ id: c.id, name: c.name })}>
 
                   <td className="px-6 py-4 font-bold text-white">{c.name}</td>
+                  <td className="px-6 py-4 text-slate-300">{c.branchName}</td>
                   <td className="px-6 py-4 text-right font-mono font-bold text-emerald-400">
                     {c.overUSD > 0 ? "+" : ""}{c.overUSD.toFixed(2)}
                   </td>

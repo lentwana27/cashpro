@@ -354,7 +354,7 @@ export function SystemBranches() {
                           <div className="flex-1 flex justify-start lg:justify-center px-0 lg:px-4 w-full lg:max-w-xs h-16 lg:h-12">
                             {chartData.length > 0 && (
                               <div className="w-full h-full flex items-end">
-                                <ResponsiveContainer width="100%" height="100%">
+                                <ResponsiveContainer minWidth={0} minHeight={0} width="100%" height="100%">
                                   <BarChart data={chartData}>
                                     <Tooltip
                                       contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #1e345e', fontSize: '10px' }}

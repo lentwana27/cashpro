@@ -1,9 +1,21 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { api } from '../lib/api';
 import { useAuth } from '../components/AuthProvider';
 import { Activity } from 'lucide-react';
 
 export function CashierDashboard() {
   const { user } = useAuth();
+  const [branchName, setBranchName] = useState<string>('');
+
+  useEffect(() => {
+    if (user?.branchId) {
+      api.get('/branches').then(branches => {
+        const b = branches.find((x: any) => x.id === user.branchId);
+        if (b) setBranchName(b.name);
+      }).catch(console.error);
+    }
+  }, [user]);
+
   
   return (
     <div className="space-y-6">
@@ -31,6 +43,10 @@ export function CashierDashboard() {
             <div className="flex justify-between pb-2">
               <span className="text-slate-400">Role:</span>
               <span className="text-emerald-400 font-medium">Cashier / Till Operator</span>
+            </div>
+            <div className="flex justify-between pb-2 mt-2">
+              <span className="text-slate-400">Allocated Branch:</span>
+              <span className="text-blue-400 font-medium">{branchName || user?.branchId || 'Not Assigned'}</span>
             </div>
           </div>
         </div>

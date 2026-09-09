@@ -49,7 +49,7 @@ export function CashierShortageChart({ reconciliations, branches }: { reconcilia
       </div>
       <div className="p-4 sm:p-6">
         <div className="h-80 w-full">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer minWidth={0} minHeight={0} width="100%" height="100%">
             <BarChart
               data={chartData}
               margin={{
