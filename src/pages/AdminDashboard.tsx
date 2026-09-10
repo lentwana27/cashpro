@@ -182,7 +182,7 @@ export function AdminDashboard() {
                   <div className="text-xs text-slate-500 mt-0.5">{u.email}</div>
                   <div className="flex gap-2 mt-2">
                     <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded text-[10px] font-bold uppercase tracking-wider">{u.role}</span>
-                    {u.branchId && <span className="px-2 py-0.5 bg-slate-800 text-slate-400 rounded text-[10px] font-medium">{branches.find(b => b.id === u.branchId)?.name || u.branchId}</span>}
+                    {u.branchId && <span className="px-2 py-0.5 bg-slate-800 text-slate-400 rounded text-[10px] font-medium">{(branches || []).find(b => b.id === u.branchId)?.name || u.branchId}</span>}
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-2">
@@ -272,7 +272,7 @@ export function AdminDashboard() {
           {reconciliations.filter(r => r.salesConfirmed).map(r => (
             <div key={r.id} className="bg-[#112240] p-4 rounded-xl border border-[#1e345e] flex flex-col gap-2">
               <div className="flex justify-between items-start">
-                <span className="font-bold text-white text-sm">{branches.find(b => b.id === r.branchId)?.name || r.branchId}</span>
+                <span className="font-bold text-white text-sm">{(branches || []).find(b => b.id === r.branchId)?.name || r.branchId}</span>
                 <span className="text-xs text-slate-400">{r.date}</span>
               </div>
               <div className="text-sm font-mono text-emerald-400">

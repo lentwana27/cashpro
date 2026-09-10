@@ -8,7 +8,7 @@ export function CashierShortageChart({ reconciliations, branches }: { reconcilia
     const stats: Record<string, { cashierName: string, branchName: string, variance: number }> = {};
 
     reconciliations.forEach(r => {
-      const branchName = branches.find(b => b.id === r.branchId)?.name || 'Unknown Branch';
+      const branchName = (branches || []).find(b => b.id === r.branchId)?.name || 'Unknown Branch';
       
       if (r.tillVariances && Array.isArray(r.tillVariances)) {
         r.tillVariances.forEach(tv => {

@@ -49,7 +49,7 @@ export function AuditorDashboard() {
     ];
     
     const rows = filteredRecon.map(r => [
-      branches.find(b => b.id === r.branchId)?.name || r.branchId,
+      (branches || []).find(b => b.id === r.branchId)?.name || r.branchId,
       r.date,
       parseFloat(getSum(r.totalSales).toFixed(2)),
       parseFloat(getSum(r.depositsReceived).toFixed(2)),
@@ -161,7 +161,7 @@ export function AuditorDashboard() {
                         {expandedId === r.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                       </button>
                     </td>
-                    <td className="px-6 py-4 font-medium text-white">{branches.find(b => b.id === r.branchId)?.name || r.branchId}</td>
+                    <td className="px-6 py-4 font-medium text-white">{(branches || []).find(b => b.id === r.branchId)?.name || r.branchId}</td>
                     <td className="px-6 py-4 text-slate-300">{format(new Date(r.date), 'MMM d, yyyy')}</td>
                     <td className="px-6 py-4 text-right font-mono">${(r.endOfDayCash?.usdEquivalent || 0).toFixed(2)}</td>
                     <td className="px-6 py-4 text-right font-mono">${(r.expectedCashUsd || 0).toFixed(2)}</td>

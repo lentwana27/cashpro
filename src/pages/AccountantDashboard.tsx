@@ -6,6 +6,7 @@ import { CheckCircle, AlertOctagon, RefreshCw, Settings, Search, ArrowUpDown, Ch
 import clsx from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as XLSX from 'xlsx';
+import { useAuth } from '../components/AuthProvider';
 
 export function AccountantDashboard() {
   const [reconciliations, setReconciliations] = useState<DailyReconciliation[]>([]);
@@ -62,7 +63,7 @@ export function AccountantDashboard() {
     .filter(r => filterStatus === 'ALL' || r.status === filterStatus)
     .filter(r => {
       if (!searchBranch) return true;
-      const b = branches.find(b => b.id === r.branchId);
+      const b = (branches || []).find(b => b.id === r.branchId);
       const bName = b?.name?.toLowerCase() || '';
       const bId = r.branchId.toLowerCase();
       const s = searchBranch.toLowerCase();
@@ -81,6 +82,48 @@ export function AccountantDashboard() {
       }
     });
 
+  
+  const exportToCSV = () => {
+    const headers = [
+      'Branch', 'Date', 'Total Sales (USD)', 'Deposits Received (USD)', 
+      'Debtors (USD)', 'Returns (USD)', 'Expenses (USD)', 'Purchases (USD)', 
+      'Expected Cash (USD)', 'End Cash (USD)', 'Variance (USD)', 'Status', 'Notes', 'Amendment History'
+    ];
+    
+    const getSum = (val: any) => {
+      if (!val) return 0;
+      if (Array.isArray(val)) return val.reduce((a:any, b:any) => a + (b.usdEquivalent || 0), 0);
+      return val.usdEquivalent || 0;
+    };
+
+    const rows = filteredRecon.map(r => [
+      (branches || []).find(b => b.id === r.branchId)?.name || r.branchId,
+      r.date,
+      parseFloat(getSum(r.totalSales).toFixed(2)),
+      parseFloat(getSum(r.depositsReceived).toFixed(2)),
+      parseFloat(getSum(r.debtors).toFixed(2)),
+      parseFloat(getSum(r.returnsRefunds).toFixed(2)),
+      parseFloat(getSum(r.expenses).toFixed(2)),
+      parseFloat(getSum(r.purchases).toFixed(2)),
+      parseFloat((r.expectedCashUsd || 0).toFixed(2)),
+      parseFloat((r.endOfDayCash?.usdEquivalent || 0).toFixed(2)),
+      parseFloat((r.varianceUsd || 0).toFixed(2)),
+      r.status,
+      `"${(r.notes || '').replace(/"/g, '""')}"`,
+      `"${(r.amendmentNotes?.join(' | ') || '').replace(/"/g, '""')}"`
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+
+    const link = document.createElement("a");
+    link.setAttribute("href", encodeURI(csvContent));
+    link.setAttribute("download", `Reconciliations_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const exportToExcel = () => {
     const headers = [
       'Branch', 'Date', 'Total Sales (USD)', 'Deposits Received (USD)', 
@@ -95,7 +138,7 @@ export function AccountantDashboard() {
     };
 
     const rows = filteredRecon.map(r => [
-      branches.find(b => b.id === r.branchId)?.name || r.branchId,
+      (branches || []).find(b => b.id === r.branchId)?.name || r.branchId,
       r.date,
       parseFloat(getSum(r.totalSales).toFixed(2)),
       parseFloat(getSum(r.depositsReceived).toFixed(2)),
@@ -144,6 +187,13 @@ export function AccountantDashboard() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <h1 className="text-3xl font-bold text-white tracking-tight">Reconciliation Review</h1>
         <div className="flex flex-wrap gap-4">
+          <button 
+            onClick={exportToCSV}
+            className="flex items-center gap-2 px-4 py-2 bg-[#112240] hover:bg-[#1a2d53] border border-[#1e345e] rounded-lg text-sm font-medium transition-colors"
+          >
+            <Download className="w-4 h-4 text-emerald-400" />
+            Download CSV
+          </button>
           <button 
             onClick={exportToExcel}
             className="flex items-center gap-2 px-4 py-2 bg-[#112240] hover:bg-[#1a2d53] border border-[#1e345e] rounded-lg text-sm font-medium transition-colors"
@@ -256,7 +306,7 @@ export function AccountantDashboard() {
                         {expandedId === r.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                       </button>
                     </td>
-                    <td className="px-6 py-4 font-medium text-white">{branches.find(b => b.id === r.branchId)?.name || r.branchId}</td>
+                    <td className="px-6 py-4 font-medium text-white">{(branches || []).find(b => b.id === r.branchId)?.name || r.branchId}</td>
                     <td className="px-6 py-4 text-slate-300">{format(new Date(r.date), 'MMM d, yyyy')}</td>
                     <td className="px-6 py-4 text-right font-mono">${(Array.isArray(r.totalSales) ? r.totalSales.reduce((a:number,b:any)=>a+(b.usdEquivalent||0),0) : (r.totalSales?.usdEquivalent || 0)).toFixed(2)}</td>
                     <td className="px-6 py-4 text-right font-mono">${(r.endOfDayCash?.usdEquivalent || 0).toFixed(2)}</td>
@@ -448,7 +498,7 @@ export function AccountantDashboard() {
         )}
         {editingSalesId && (
           <InputSalesModal 
-            reconciliation={reconciliations.find(r => r.id === editingSalesId)} 
+            reconciliation={(reconciliations || []).find(r => r.id === editingSalesId)} 
             rates={rates} 
             onClose={() => setEditingSalesId(null)} 
             onUpdate={() => { setEditingSalesId(null); loadData(); }} 
@@ -604,7 +654,7 @@ function InputSalesModal({ reconciliation, rates, onClose, onUpdate }: any) {
     if (field === 'amount' || field === 'currencyCode') {
       const code = field === 'currencyCode' ? value : newItems[index].currencyCode;
       const amt = field === 'amount' ? value : newItems[index].amount;
-      const rate = rates.find((r: any) => r.currencyCode === code)?.rateToUsd || 1;
+      const rate = (rates || []).find((r: any) => r.currencyCode === code)?.rateToUsd || 1;
       newItems[index].usdEquivalent = parseFloat(amt) * rate;
     }
     setSalesItems(newItems);

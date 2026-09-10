@@ -28,7 +28,7 @@ function SupervisorWrapper() {
 
   const stats = useMemo(() => {
     if (!activeBranchId) return { sales: 0, variance: 0, count: 0 };
-    const branchRecs = recons.filter((r: any) => r.branchId === activeBranchId);
+    const branchRecs = (recons || []).filter((r: any) => r.branchId === activeBranchId);
     let sales = 0;
     let variance = 0;
     branchRecs.forEach((r: any) => {
@@ -49,7 +49,7 @@ function SupervisorWrapper() {
             <p className="text-sm text-slate-400 mt-1">Select a branch to view specific performance metrics and manage cash-ups.</p>
           </div>
           <div className="bg-[#061121] border border-[#1e345e] text-white px-4 py-2 rounded-lg font-bold">
-            {activeBranchId ? (branches.find(b => b.id === activeBranchId)?.name || 'Loading branch...') : 'No Branch Assigned'}
+            {activeBranchId ? ((branches || []).find(b => b.id === activeBranchId)?.name || 'Loading branch...') : 'No Branch Assigned'}
           </div>
         </div>
         

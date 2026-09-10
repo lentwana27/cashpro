@@ -61,6 +61,47 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
     }
   }, [quickLogs, quickLogKey]);
 
+  
+  const exportToCSV = () => {
+    const headers = [
+      'Date', 'Total Sales (USD)', 'Deposits Received (USD)', 
+      'Debtors (USD)', 'Returns (USD)', 'Expenses (USD)', 'Purchases (USD)', 
+      'Expected Cash (USD)', 'End Cash (USD)', 'Variance (USD)', 'Status', 'Notes', 'Amendment History'
+    ];
+    
+    const getSum = (val: any) => {
+      if (!val) return 0;
+      if (Array.isArray(val)) return val.reduce((a:any, b:any) => a + (b.usdEquivalent || 0), 0);
+      return val.usdEquivalent || 0;
+    };
+
+    const rows = history.map((r: any) => [
+      r.date,
+      parseFloat(getSum(r.totalSales).toFixed(2)),
+      parseFloat(getSum(r.depositsReceived).toFixed(2)),
+      parseFloat(getSum(r.debtors).toFixed(2)),
+      parseFloat(getSum(r.returnsRefunds).toFixed(2)),
+      parseFloat(getSum(r.expenses).toFixed(2)),
+      parseFloat(getSum(r.purchases).toFixed(2)),
+      parseFloat((r.expectedCashUsd || 0).toFixed(2)),
+      parseFloat((r.endOfDayCash?.usdEquivalent || 0).toFixed(2)),
+      parseFloat((r.varianceUsd || 0).toFixed(2)),
+      r.status,
+      `"${(r.notes || '').replace(/"/g, '""')}"`,
+      `"${(r.amendmentNotes?.join(' | ') || '').replace(/"/g, '""')}"`
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+
+    const link = document.createElement("a");
+    link.setAttribute("href", encodeURI(csvContent));
+    link.setAttribute("download", `CashUps_${branch?.name || 'Branch'}_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleClearPastData = async () => {
     if (!confirm("Are you sure you want to clear all past cashup data for this branch? This action cannot be undone and will not affect user accounts.")) return;
     try {
@@ -131,7 +172,7 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
     const amountNum = parseFloat(qlAmount) || 0;
     if (amountNum > 0 || qlDesc) {
       const rate =
-        rates.find((r: any) => r.currencyCode === qlCurr)?.rateToUsd || 1;
+        (rates || []).find((r: any) => r.currencyCode === qlCurr)?.rateToUsd || 1;
       const newLog = {
         id: Math.random().toString(),
         category: qlCategory,
@@ -1081,7 +1122,7 @@ function CashUpForm({
 
   const getUsd = (amount: number, code: string) => {
     const rate =
-      rates.find((r: any) => r.currencyCode === code)?.rateToUsd || 1;
+      (rates || []).find((r: any) => r.currencyCode === code)?.rateToUsd || 1;
     return amount * rate;
   };
 
@@ -1584,7 +1625,7 @@ function MissingSalesForm({ recon, rates, branch, cashiers, onCancel, onSuccess 
   const currencies = rates.map((r: any) => r.currencyCode);
   const getUsd = (amount: number, code: string) => {
     const rate =
-      rates.find((r: any) => r.currencyCode === code)?.rateToUsd || 1;
+      (rates || []).find((r: any) => r.currencyCode === code)?.rateToUsd || 1;
     return amount * rate;
   };
   const createItem = (desc: string): ReconLineItem => ({
@@ -1634,7 +1675,7 @@ function MissingSalesForm({ recon, rates, branch, cashiers, onCancel, onSuccess 
         const tillSales = updatedTotalSales[idx]?.usdEquivalent || 0;
         const matchingCash = cashBreakdown.filter((cb: any) => cb.description.includes(tv.tillName) || cb.description.includes("End of Day Physical Cash Counted"));
         const tillCash = matchingCash.reduce((acc: number, curr: any) => acc + (curr.usdEquivalent || 0), 0);
-        const cashier = cashiers.find((c: any) => c.id === tv.cashierId);
+        const cashier = (cashiers || []).find((c: any) => c.id === tv.cashierId);
         return {
           ...tv,
           cashierName: cashier?.name || 'Unknown',
@@ -1880,7 +1921,7 @@ function PhysicalCashListField({
                   onChange={(e) => {
                     const newArr = [...items];
                     newArr[idx].cashierId = e.target.value;
-                    const c = cashiers.find((x: any) => x.id === e.target.value);
+                    const c = (cashiers || []).find((x: any) => x.id === e.target.value);
                     newArr[idx].cashierName = c ? c.name : (e.target.value === 'none' ? 'None' : '');
                     if (e.target.value === 'none') {
                       newArr[idx].amount = 0;
@@ -2064,7 +2105,7 @@ function ReconListField({
                   onChange={(e) => {
                     const newArr = [...items];
                     newArr[idx].cashierId = e.target.value;
-                    const c = cashiers.find((x: any) => x.id === e.target.value);
+                    const c = (cashiers || []).find((x: any) => x.id === e.target.value);
                     newArr[idx].cashierName = c ? c.name : "";
                     setItems(newArr);
                   }}

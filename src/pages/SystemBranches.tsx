@@ -48,14 +48,14 @@ export function SystemBranches() {
   }, []);
 
   const getSupervisorsForBranch = (bId: string) => {
-    const currentAssigned = users.filter(u => u.branchId === bId && u.role === 'SUPERVISOR');
+    const currentAssigned = (users || []).filter(u => u.branchId === bId && u.role === 'SUPERVISOR');
     const branchRecons = reconciliations.filter(r => r.branchId === bId);
     const pastUserIds = Array.from(new Set(branchRecons.map(r => r.supervisorId)));
     
     const allRelated = [...currentAssigned];
     pastUserIds.forEach(uid => {
       if (uid && !allRelated.some(u => u.id === uid)) {
-        const u = users.find(x => x.id === uid);
+        const u = (users || []).find(x => x.id === uid);
         if (u) allRelated.push(u);
       }
     });
@@ -113,7 +113,7 @@ export function SystemBranches() {
   };
 
   const getTillOperatorsForBranch = (bId: string) => {
-    const currentAssigned = users.filter(u => u.branchId === bId && u.role === 'CASHIER');
+    const currentAssigned = (users || []).filter(u => u.branchId === bId && u.role === 'CASHIER');
     const branchRecons = reconciliations.filter(r => r.branchId === bId);
     
     const pastOperatorIds = new Set<string>();
@@ -126,7 +126,7 @@ export function SystemBranches() {
     const allRelated = [...currentAssigned];
     pastOperatorIds.forEach(uid => {
       if (uid && !allRelated.some(u => u.id === uid)) {
-        const u = users.find(x => x.id === uid);
+        const u = (users || []).find(x => x.id === uid);
         if (u) allRelated.push(u);
       }
     });
@@ -613,7 +613,7 @@ export function SystemBranches() {
                   className="w-full bg-[#061121] border border-[#1e345e] text-white p-3 rounded-lg focus:outline-none focus:border-indigo-500"
                 >
                   <option value="">-- Choose an operator --</option>
-                  {users.filter(u => u.role === 'CASHIER' && u.branchId !== selectedBranch.id).map(u => (
+                  {(users || []).filter(u => u.role === 'CASHIER' && u.branchId !== selectedBranch.id).map(u => (
                     <option key={u.id} value={u.id}>
                       {u.name} ({u.email})
                     </option>
@@ -659,7 +659,7 @@ export function SystemBranches() {
       )}
       {viewReconId && (
         <ReconModal 
-          recon={reconciliations.find(r => r.id === viewReconId)}
+          recon={(reconciliations || []).find(r => r.id === viewReconId)}
           onClose={() => setViewReconId(null)}
         />
       )}

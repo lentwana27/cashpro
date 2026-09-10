@@ -109,7 +109,7 @@ export function DirectorDashboard() {
 
   const branchAggregates = (Object.values(filteredReconciliations.reduce((acc: Record<string, { branchId: string, name: string, sales: number, variance: number, expenses: number, shortageCount: number }>, curr) => {
     if (!acc[curr.branchId]) {
-      acc[curr.branchId] = { branchId: curr.branchId, name: branches.find(b => b.id === curr.branchId)?.name || curr.branchId, sales: 0, variance: 0, expenses: 0, shortageCount: 0 };
+      acc[curr.branchId] = { branchId: curr.branchId, name: (branches || []).find(b => b.id === curr.branchId)?.name || curr.branchId, sales: 0, variance: 0, expenses: 0, shortageCount: 0 };
     }
     acc[curr.branchId].sales += getSumVal(curr.totalSales);
     acc[curr.branchId].variance += curr.varianceUsd;
@@ -128,11 +128,51 @@ export function DirectorDashboard() {
     .filter(r => !selectedBranchFilter || r.branchId === selectedBranchFilter)
     .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
+  
+  const exportToCSV = () => {
+    const headers = [
+      'Branch', 'Date', 'Total Sales (USD)', 'Deposits Received (USD)', 
+      'Debtors (USD)', 'Returns (USD)', 'Expenses (USD)', 'Purchases (USD)', 
+      'Expected Cash (USD)', 'End Cash (USD)', 'Variance (USD)', 'Status'
+    ];
+    
+    const getSum = (val: any) => {
+      if (!val) return 0;
+      if (Array.isArray(val)) return val.reduce((a:any, b:any) => a + (b.usdEquivalent || 0), 0);
+      return val.usdEquivalent || 0;
+    };
+
+    const rows = sortedReconciliations.map((r: any) => [
+      (branches || []).find(b => b.id === r.branchId)?.name || r.branchId,
+      r.date,
+      parseFloat(getSum(r.totalSales).toFixed(2)),
+      parseFloat(getSum(r.depositsReceived).toFixed(2)),
+      parseFloat(getSum(r.debtors).toFixed(2)),
+      parseFloat(getSum(r.returnsRefunds).toFixed(2)),
+      parseFloat(getSum(r.expenses).toFixed(2)),
+      parseFloat(getSum(r.purchases).toFixed(2)),
+      parseFloat((r.expectedCashUsd || 0).toFixed(2)),
+      parseFloat((r.endOfDayCash?.usdEquivalent || 0).toFixed(2)),
+      parseFloat((r.varianceUsd || 0).toFixed(2)),
+      r.status
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+
+    const link = document.createElement("a");
+    link.setAttribute("href", encodeURI(csvContent));
+    link.setAttribute("download", `CashUps_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const exportBranchDataToExcel = () => {
     // Sheet 1: Branch Aggregates
     const aggHeaders = ['Branch Code', 'Branch Name', 'Location', 'Total Sales (USD)', 'Total Variance (USD)', 'Total Expenses (USD)'];
     const aggRows = branchAggregates.map((ba: any) => {
-      const b = branches.find(br => br.id === ba.branchId);
+      const b = (branches || []).find(br => br.id === ba.branchId);
       return [
         ba.branchId,
         b?.name || 'Unknown',
@@ -157,7 +197,7 @@ export function DirectorDashboard() {
     };
 
     const rawRows = sortedReconciliations.map(r => [
-      branches.find(b => b.id === r.branchId)?.name || r.branchId,
+      (branches || []).find(b => b.id === r.branchId)?.name || r.branchId,
       r.date,
       parseFloat(getSum(r.totalSales).toFixed(2)),
       parseFloat(getSum(r.depositsReceived).toFixed(2)),
@@ -192,7 +232,7 @@ export function DirectorDashboard() {
     
     const aggHeaders = [['Branch', 'Name', 'Location', 'Sales (USD)', 'Variance (USD)', 'Expenses (USD)']];
     const aggRows = branchAggregates.map((ba: any) => {
-      const b = branches.find(br => br.id === ba.branchId);
+      const b = (branches || []).find(br => br.id === ba.branchId);
       return [
         ba.branchId,
         b?.name || 'Unknown',
@@ -225,7 +265,7 @@ export function DirectorDashboard() {
     };
 
     const rawRows = sortedReconciliations.map(r => [
-      branches.find(b => b.id === r.branchId)?.name || r.branchId,
+      (branches || []).find(b => b.id === r.branchId)?.name || r.branchId,
       r.date,
       `$${parseFloat(getSum(r.totalSales).toFixed(2))}`,
       `$${parseFloat((r.expectedCashUsd || 0).toFixed(2))}`,
@@ -304,6 +344,13 @@ export function DirectorDashboard() {
             )}
           </div>
           <div className="flex items-center gap-2">
+            <button 
+              onClick={exportToCSV}
+              className="flex items-center gap-2 px-3 py-2 bg-[#112240] hover:bg-[#1a2d53] border border-[#1e345e] rounded-lg text-sm font-medium text-white shadow-lg transition-colors"
+            >
+              <Download className="w-4 h-4 text-emerald-400" />
+              CSV
+            </button>
             <button 
               onClick={exportBranchDataToExcel}
               className="flex items-center gap-2 px-3 py-2 bg-emerald-500 hover:bg-emerald-600 rounded-lg text-sm font-medium text-white shadow-lg transition-colors"
@@ -504,7 +551,7 @@ export function DirectorDashboard() {
                           <FileText className="w-4 h-4" />
                         </div>
                       </td>
-                      <td className="px-4 py-3 font-medium text-white">{branches.find(b => b.id === r.branchId)?.name || r.branchId}</td>
+                      <td className="px-4 py-3 font-medium text-white">{(branches || []).find(b => b.id === r.branchId)?.name || r.branchId}</td>
                       <td className="px-4 py-3 text-slate-300">{format(new Date(r.date), 'MMM d, yyyy')}</td>
                       <td className="px-4 py-3 text-right font-mono">${(Array.isArray(r.totalSales) ? r.totalSales.reduce((a,b)=>a+(b.usdEquivalent||0),0) : (r.totalSales?.usdEquivalent || 0)).toFixed(2)}</td>
                       <td className={clsx("px-4 py-3 text-right font-mono font-bold", 
@@ -532,7 +579,7 @@ export function DirectorDashboard() {
       </div>
       {viewReconId && (
         <ReconModal 
-          recon={reconciliations.find(r => r.id === viewReconId)}
+          recon={(reconciliations || []).find(r => r.id === viewReconId)}
           onClose={() => setViewReconId(null)}
         />
       )}

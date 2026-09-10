@@ -10,7 +10,7 @@ export function CashierDashboard() {
   useEffect(() => {
     if (user?.branchId) {
       api.get('/branches').then(branches => {
-        const b = branches.find((x: any) => x.id === user.branchId);
+        const b = (branches || []).find((x: any) => x.id === user.branchId);
         if (b) setBranchName(b.name);
       }).catch(console.error);
     }

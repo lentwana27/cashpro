@@ -16,7 +16,7 @@ export function CashierPerformance({ reconciliations, branches }: { reconciliati
       if (r.tillVariances && Array.isArray(r.tillVariances)) {
         r.tillVariances.forEach(tv => {
           if (!tv.cashierId) return;
-          const b = branches.find(b => b.id === r.branchId);
+          const b = (branches || []).find(b => b.id === r.branchId);
           const bName = b ? b.name : 'Unknown';
           if (!stats[tv.cashierId]) {
             stats[tv.cashierId] = { id: tv.cashierId, name: tv.cashierName || 'Unknown', branchName: bName, sales: 0, cash: 0, variance: 0, totalOvers: 0, totalUnders: 0, counts: 0 };

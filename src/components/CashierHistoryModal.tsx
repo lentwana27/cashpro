@@ -26,7 +26,7 @@ export function CashierHistoryModal({
       if (r.tillVariances && Array.isArray(r.tillVariances)) {
         r.tillVariances.forEach(tv => {
           if (tv.cashierId === cashierId) {
-            const b = branches.find(b => b.id === r.branchId);
+            const b = (branches || []).find(b => b.id === r.branchId);
             records.push({
               date: r.date,
               branchName: b ? b.name : 'Unknown',

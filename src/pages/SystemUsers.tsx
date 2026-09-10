@@ -142,11 +142,11 @@ export function SystemUsers() {
     }
   };
 
-  const filteredUsers = users.filter((u) =>
+  const filteredUsers = (users || []).filter((u) =>
     u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
     u.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (branches.find((b) => b.id === u.branchId)?.name || '').toLowerCase().includes(searchQuery.toLowerCase())
+    ((branches || []).find((b) => b.id === u.branchId)?.name || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -222,7 +222,7 @@ export function SystemUsers() {
                           {u.role}
                         </span>
                         <span className="text-[10px] text-slate-400">
-                          {branches.find(b => b.id === u.branchId)?.name || 'No Branch'}
+                          {(branches || []).find(b => b.id === u.branchId)?.name || 'No Branch'}
                         </span>
                       </div>
                     </td>
