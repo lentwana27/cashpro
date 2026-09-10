@@ -13,6 +13,7 @@ export const users = pgTable('users', {
   active: boolean('active').default(true),
   lastSeen: text('last_seen'),
   isOnline: boolean('is_online').default(false),
+  pendingDeletion: boolean('pending_deletion').default(false),
   createdAt: timestamp('created_at').defaultNow(),
 });
 

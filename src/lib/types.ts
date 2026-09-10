@@ -10,6 +10,7 @@ export interface User {
   active: boolean;
   lastSeen?: string;
   isOnline?: boolean;
+  pendingDeletion?: boolean;
 }
 
 export interface Message {

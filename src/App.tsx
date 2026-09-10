@@ -57,7 +57,7 @@ export default function App() {
             </ProtectedRoute>
           } />
           <Route path="/users" element={
-            <ProtectedRoute allowedRoles={['ADMIN', 'SUPERVISOR']}>
+            <ProtectedRoute allowedRoles={['ADMIN', 'SUPERVISOR', 'AUDITOR']}>
               <Layout>
                 <SystemUsers />
               </Layout>

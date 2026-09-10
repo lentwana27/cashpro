@@ -6,12 +6,13 @@ import clsx from 'clsx';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../components/AuthProvider';
 import { Branch } from '../lib/types';
-import { Pencil, Trash2, Plus, Lock } from 'lucide-react';
+import { Pencil, Trash2, Plus, Lock, Search } from 'lucide-react';
 
 
 export function SystemUsers() {
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [alertTarget, setAlertTarget] = useState<User | null>(null);
   const [alertMessage, setAlertMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -25,7 +26,9 @@ export function SystemUsers() {
   useEffect(() => {
     loadUsersAndBranches();
     const interval = setInterval(loadUsersAndBranches, 30000); // Polling for last seen
-    return () => clearInterval(interval);
+    
+
+  return () => clearInterval(interval);
   }, []);
 
   
@@ -87,10 +90,29 @@ export function SystemUsers() {
     }
   };
 
-  const handleDeleteUser = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this user?')) return;
+    const handleRequestDeleteUser = async (id: string) => {
+    if (!confirm('Are you sure you want to request deletion for this account? System Admin must confirm.')) return;
+    try {
+      await api.put(`/users/${id}`, { pendingDeletion: true });
+      loadUsersAndBranches();
+    } catch (e: any) {
+      alert(e.message || 'Failed to request deletion');
+    }
+  };
+
+  const handleConfirmDeleteUser = async (id: string) => {
+    if (!confirm('Are you sure you want to PERMANENTLY delete this user?')) return;
     try {
       await api.delete(`/users/${id}`);
+      loadUsersAndBranches();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleRejectDeleteUser = async (id: string) => {
+    try {
+      await api.put(`/users/${id}`, { pendingDeletion: false });
       loadUsersAndBranches();
     } catch (e) {
       console.error(e);
@@ -120,6 +142,13 @@ export function SystemUsers() {
     }
   };
 
+  const filteredUsers = users.filter((u) =>
+    u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    u.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (branches.find((b) => b.id === u.branchId)?.name || '').toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <div className="space-y-6">
       
@@ -128,7 +157,7 @@ export function SystemUsers() {
           <h1 className="text-3xl font-bold text-white tracking-tight">System Users</h1>
           <p className="text-slate-400 mt-1">Manage users, till operators, and access.</p>
         </div>
-        {(currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPERVISOR') && (
+        {(currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPERVISOR' || currentUser?.role === 'AUDITOR') && (
           <button 
             onClick={() => {
               setEditUser({ role: 'CASHIER', active: true });
@@ -144,10 +173,22 @@ export function SystemUsers() {
 
 
       <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl shadow-xl overflow-hidden">
-        <div className="p-4 sm:p-6 border-b border-[#1e345e] bg-[#061121]">
-          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+        <div className="p-4 sm:p-6 border-b border-[#1e345e] bg-[#061121] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <h2 className="text-lg font-bold text-white flex items-center gap-2 shrink-0">
             <Users className="w-5 h-5 text-blue-400" /> User Directory
           </h2>
+          <div className="relative w-full sm:w-64 shrink-0">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="w-4 h-4 text-slate-500" />
+            </div>
+            <input
+              type="text"
+              placeholder="Search users..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-[#112240] border border-[#1e345e] text-white pl-9 pr-3 py-2 rounded-lg text-sm focus:outline-none focus:border-emerald-500 transition-colors placeholder-slate-500"
+            />
+          </div>
         </div>
         <div className="p-0">
           <div className="overflow-x-auto">
@@ -161,7 +202,7 @@ export function SystemUsers() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#1e345e]">
-                {users.map(u => (
+                {filteredUsers.map(u => (
                   <tr key={u.id} className="hover:bg-[#112240]/50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
@@ -196,7 +237,8 @@ export function SystemUsers() {
                     </td>
                     
                     <td className="px-6 py-4 text-right">
-                      {(currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPERVISOR') && (
+                      <div className="flex items-center justify-end gap-2">
+                      {(currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPERVISOR' || currentUser?.role === 'AUDITOR') && (
                         <>
                           <button 
                             onClick={() => {
@@ -204,41 +246,73 @@ export function SystemUsers() {
                               setUserPassword('');
                               setShowUserModal(true);
                             }}
-                            className="p-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg mr-2 transition-colors"
+                            className="p-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg transition-colors"
                             title="Edit User"
                           >
                             <Pencil className="w-4 h-4" />
                           </button>
+                          
+                          {(currentUser?.role === 'ADMIN' || currentUser?.role === 'AUDITOR') && (
+                            <button 
+                              onClick={() => handleTransferToAudit(u.id)}
+                              className="p-1.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 rounded-lg transition-colors"
+                              title="Transfer to Audit"
+                            >
+                              <ShieldAlert className="w-4 h-4" />
+                            </button>
+                          )}
 
-                          <button 
-                            onClick={() => handleTransferToAudit(u.id)}
-                            className="p-1.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 rounded-lg mr-2 transition-colors"
-                            title="Transfer to Audit"
-                          >
-                            <ShieldAlert className="w-4 h-4" />
-                          </button>
-                          <button 
-                            onClick={() => handleDeleteUser(u.id)}
-                            className="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg mr-4 transition-colors"
-                            title="Delete User"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {u.pendingDeletion && currentUser?.role === 'ADMIN' ? (
+                            <>
+                              <button 
+                                onClick={() => handleRejectDeleteUser(u.id)}
+                                className="px-2 py-1 bg-slate-500/10 hover:bg-slate-500/20 text-slate-400 rounded-lg text-xs font-bold transition-colors"
+                                title="Reject Deletion"
+                              >
+                                Cancel Del
+                              </button>
+                              <button 
+                                onClick={() => handleConfirmDeleteUser(u.id)}
+                                className="px-2 py-1 bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs rounded-lg transition-colors"
+                                title="Confirm Delete"
+                              >
+                                Confirm Del
+                              </button>
+                            </>
+                          ) : currentUser?.role === 'ADMIN' ? (
+                            <button 
+                              onClick={() => handleConfirmDeleteUser(u.id)}
+                              className="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg transition-colors"
+                              title="Delete User"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          ) : (
+                             <button 
+                              onClick={() => handleRequestDeleteUser(u.id)}
+                              disabled={u.pendingDeletion}
+                              className={"p-1.5 rounded-lg transition-colors " + (u.pendingDeletion ? "bg-slate-500/20 text-slate-500 cursor-not-allowed" : "bg-rose-500/10 hover:bg-rose-500/20 text-rose-400")}
+                              title={u.pendingDeletion ? "Deletion Requested" : "Request Deletion"}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </>
                       )}
+                      
                       <button 
- 
                         onClick={() => setAlertTarget(u)}
                         disabled={!u.active}
-                        className="inline-flex items-center gap-2 px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-lg text-xs font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-lg text-xs font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <AlertTriangle className="w-3.5 h-3.5" />
-                        Send Alert
+                        Alert
                       </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
-                {users.length === 0 && (
+                {filteredUsers.length === 0 && (
                   <tr>
                     <td colSpan={4} className="px-6 py-8 text-center text-slate-500">
                       No other users found.
@@ -356,7 +430,7 @@ export function SystemUsers() {
                 >
                   <option value="CASHIER">Till Operator (Cashier)</option>
                   <option value="SUPERVISOR">Supervisor</option>
-                  {currentUser?.role === 'ADMIN' && (
+                  {(currentUser?.role === 'ADMIN' || currentUser?.role === 'AUDITOR') && (
                     <>
                       <option value="ACCOUNTANT">Accountant</option>
                       <option value="HEAD_ACCOUNTANT">Head Accountant</option>

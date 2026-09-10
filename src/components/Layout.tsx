@@ -78,7 +78,7 @@ export function Layout({ children }: { children: ReactNode }) {
           {['ADMIN', 'ACCOUNTANT', 'HEAD_ACCOUNTANT', 'DIRECTOR', 'AUDITOR'].includes(user.role) && (
             <>
               <div className="mt-6 mb-2 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">System</div>
-              {(user.role === 'ADMIN' || user.role === 'SUPERVISOR') && (
+              {(user.role === 'ADMIN' || user.role === 'SUPERVISOR' || user.role === 'AUDITOR') && (
                 <Link to="/users" className="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:bg-[#112240] hover:text-emerald-400 transition-colors">
                   <Users className="w-5 h-5" />
                   <span className="font-medium">Users</span>
@@ -163,7 +163,7 @@ export function Layout({ children }: { children: ReactNode }) {
                 {['ADMIN', 'ACCOUNTANT', 'HEAD_ACCOUNTANT', 'DIRECTOR', 'AUDITOR'].includes(user.role) && (
                   <>
                     <div className="mt-6 mb-2 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">System</div>
-                    {(user.role === 'ADMIN' || user.role === 'SUPERVISOR') && (
+                    {(user.role === 'ADMIN' || user.role === 'SUPERVISOR' || user.role === 'AUDITOR') && (
                       <Link to="/users" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:bg-[#112240] hover:text-emerald-400 transition-colors">
                         <Users className="w-5 h-5" />
                         <span className="font-medium">Users</span>
