@@ -14,7 +14,7 @@ function SupervisorWrapper() {
   const { user } = useAuth();
   const [branches, setBranches] = useState<any[]>([]);
   const [recons, setRecons] = useState<any[]>([]);
-  const [activeBranchId, setActiveBranchId] = useState<string>(user?.branchId || '');
+  const activeBranchId = user?.branchId || '';
 
   useEffect(() => {
     Promise.all([
@@ -23,9 +23,6 @@ function SupervisorWrapper() {
     ]).then(([br, recs]) => {
       setBranches(br);
       setRecons(recs);
-      if (!activeBranchId && br.length > 0) {
-        setActiveBranchId(br[0].id);
-      }
     }).catch(console.error);
   }, []);
 
@@ -51,16 +48,9 @@ function SupervisorWrapper() {
             </h2>
             <p className="text-sm text-slate-400 mt-1">Select a branch to view specific performance metrics and manage cash-ups.</p>
           </div>
-          <select
-            value={activeBranchId}
-            onChange={(e) => setActiveBranchId(e.target.value)}
-            className="bg-[#061121] border border-[#1e345e] text-white px-4 py-2 rounded-lg focus:outline-none focus:border-emerald-500 min-w-[200px]"
-          >
-            {branches.map(b => (
-              <option key={b.id} value={b.id}>{b.name} ({b.id})</option>
-            ))}
-            {branches.length === 0 && <option value={activeBranchId}>Loading branches...</option>}
-          </select>
+          <div className="bg-[#061121] border border-[#1e345e] text-white px-4 py-2 rounded-lg font-bold">
+            {activeBranchId ? (branches.find(b => b.id === activeBranchId)?.name || 'Loading branch...') : 'No Branch Assigned'}
+          </div>
         </div>
         
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
