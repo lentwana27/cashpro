@@ -11,12 +11,20 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-
-  useEffect(() => {
-    localStorage.removeItem('cashup_session');
-  }, []);
+  const [user, setUser] = useState<User | null>(() => {
+    try {
+      const saved = localStorage.getItem('cashup_session');
+      if (saved) return JSON.parse(saved).user;
+    } catch(e) {}
+    return null;
+  });
+  const [token, setToken] = useState<string | null>(() => {
+    try {
+      const saved = localStorage.getItem('cashup_session');
+      if (saved) return JSON.parse(saved).token;
+    } catch(e) {}
+    return null;
+  });
 
   useEffect(() => {
     if (!user) return;
