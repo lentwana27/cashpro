@@ -1,22 +1,45 @@
 const fs = require('fs');
 let content = fs.readFileSync('src/pages/SupervisorDashboard.tsx', 'utf8');
 
-// Add "none" to Select Cashier options in SalesInputModal
+// MissingSalesForm
 content = content.replace(
-  '<option value="">Select Cashier for {tv.tillName}...</option>',
-  '<option value="">Select Cashier for {tv.tillName}...</option>\n                    <option value="none">None - Not Working</option>'
+  `function MissingSalesForm({ recon, rates, branch, cashiers, onCancel, onSuccess }: any)`,
+  `function MissingSalesForm({ currentUser, recon, rates, branch, cashiers, onCancel, onSuccess }: any)`
 );
 
-// Add "none" to Cashier Assignment in the main form (if applicable)
 content = content.replace(
-  '<option value="">Select Till Operator...</option>',
-  '<option value="">Select Till Operator...</option>\n                  <option value="none">None - Not Working</option>'
+  `<MissingSalesForm`,
+  `<MissingSalesForm currentUser={user}`
 );
 
-// For sales array mapping, if cashier is "none", hide the input in ReconListField?
-// Wait, ReconListField takes `items`. Let's just modify the `SalesInputModal` render logic:
-// Instead of modifying ReconListField, we can just hide it inside ReconListField by adding a hidden property.
-// But ReconListField is used for other fields too.
+const oldMissingSalesPut = `        salesConfirmed: true,
+      });`;
+
+const newMissingSalesPut = `        salesConfirmed: true,
+        salesInputtedBy: recon.salesInputtedBy || currentUser?.id,
+        salesInputtedByName: recon.salesInputtedByName || currentUser?.name,
+      });`;
+
+content = content.replace(oldMissingSalesPut, newMissingSalesPut);
+
+// CashUpForm - initial submission
+const oldCashupSubmit = `      salesConfirmed: existingData?.salesConfirmed || false,
+    };`;
+
+const newCashupSubmit = `      salesConfirmed: existingData?.salesConfirmed || false,
+      salesInputtedBy: existingData?.salesInputtedBy || user?.id,
+      salesInputtedByName: existingData?.salesInputtedByName || user?.name,
+    };`;
+
+content = content.replace(oldCashupSubmit, newCashupSubmit);
+
+// Display sales inputter in Supervisor history
+const oldDateDisplay = `<td className="px-6 py-4 text-slate-300">{format(new Date(r.date), 'MMM d, yyyy')}</td>`;
+const newDateDisplay = `<td className="px-6 py-4 text-slate-300">
+                      <div>{format(new Date(r.date), 'MMM d, yyyy')}</div>
+                      {r.salesInputtedByName && <div className="text-[10px] text-emerald-400 font-bold mt-1">Sales by: {r.salesInputtedByName}</div>}
+                    </td>`;
+content = content.replace(oldDateDisplay, newDateDisplay);
 
 fs.writeFileSync('src/pages/SupervisorDashboard.tsx', content);
-console.log('Patched options');
+console.log("Patched SupervisorDashboard");

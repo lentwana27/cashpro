@@ -42,7 +42,7 @@ export function Layout({ children }: { children: ReactNode }) {
   if (!user) return null;
 
   return (
-    <div className="flex flex-col md:flex-row h-screen bg-[#061121] text-slate-200 overflow-hidden font-sans">
+    <div className="flex flex-col md:flex-row h-screen h-[100dvh] bg-[#061121] text-slate-200 overflow-hidden font-sans w-full max-w-[100vw]">
       <div className="md:hidden flex items-center justify-between p-4 border-b border-[#1e345e] bg-[#0a192f] z-30 relative">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center border border-emerald-500/50">
@@ -200,7 +200,7 @@ export function Layout({ children }: { children: ReactNode }) {
       </AnimatePresence>
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto relative z-10 w-full overflow-x-hidden">
+      <main className="flex-1 min-w-0 min-h-0 overflow-y-auto relative z-10 w-full overflow-x-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-[#112240]/40 via-transparent to-transparent pointer-events-none" />
         <div className="p-4 md:p-8 max-w-7xl mx-auto min-h-full relative z-10">
           {user && (

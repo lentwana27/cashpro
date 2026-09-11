@@ -2,15 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { DailyReconciliation, Branch } from '../lib/types';
 import { CashierShortageChart } from '../components/CashierShortageChart';
-import { Search, ShieldAlert, Download, Building2, Calendar, FileText, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
+import { Search, ShieldAlert, Download, Building2, Calendar, FileText, ChevronDown, ChevronUp, AlertTriangle, AlertOctagon } from 'lucide-react';
 import clsx from 'clsx';
 import { format } from 'date-fns';
+import { useAuth } from '../components/AuthProvider';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export function AuditorDashboard() {
   const [reconciliations, setReconciliations] = useState<DailyReconciliation[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [rates, setRates] = useState<any[]>([]);
+  const [editingSalesId, setEditingSalesId] = useState<string | null>(null);
+  const { user } = useAuth();
 
   useEffect(() => {
     loadData();
@@ -18,12 +23,14 @@ export function AuditorDashboard() {
 
   const loadData = async () => {
     try {
-      const [recons, brs] = await Promise.all([
+            const [rtData, recData, brData] = await Promise.all([
+        api.get('/rates'),
         api.get('/reconciliations'),
         api.get('/branches')
       ]);
-      setReconciliations(recons);
-      setBranches(brs);
+      setRates(rtData.data);
+      setReconciliations(recData.data || recData);
+      setBranches(brData.data || brData);
     } catch (e) {
       // Ignore network errors during polling
     }
@@ -84,6 +91,20 @@ export function AuditorDashboard() {
       console.error(e);
     }
   };
+
+  const updateStatus = async (id: string, status: string, recon?: any) => {
+    if (status === 'AMENDMENT_APPROVED' && recon) {
+      const updates: any = { auditorAmendmentApproval: true };
+      if (recon.accountantAmendmentApproval) {
+        updates.status = 'AMENDMENT_APPROVED';
+      }
+      await api.put(`/reconciliations/${id}`, updates);
+    } else {
+      await api.put(`/reconciliations/${id}`, { status });
+    }
+    loadData();
+  };
+
 
   return (
     <div className="space-y-6">
@@ -162,7 +183,10 @@ export function AuditorDashboard() {
                       </button>
                     </td>
                     <td className="px-6 py-4 font-medium text-white">{(branches || []).find(b => b.id === r.branchId)?.name || r.branchId}</td>
-                    <td className="px-6 py-4 text-slate-300">{format(new Date(r.date), 'MMM d, yyyy')}</td>
+                    <td className="px-6 py-4 text-slate-300">
+                      <div>{format(new Date(r.date), 'MMM d, yyyy')}</div>
+                      {r.salesInputtedByName && <div className="text-[10px] text-emerald-400 font-bold mt-1">Sales by: {r.salesInputtedByName}</div>}
+                    </td>
                     <td className="px-6 py-4 text-right font-mono">${(r.endOfDayCash?.usdEquivalent || 0).toFixed(2)}</td>
                     <td className="px-6 py-4 text-right font-mono">${(r.expectedCashUsd || 0).toFixed(2)}</td>
                     <td className={clsx("px-6 py-4 text-right font-mono font-bold", 
@@ -186,7 +210,21 @@ export function AuditorDashboard() {
                           onClick={() => markAsFlagged(r.id)}
                           className="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-400 rounded transition-colors text-xs font-bold"
                         >
-                          Flag Issue
+                          Flag
+                        </button>
+                      )}
+                      <button 
+                          onClick={() => setEditingSalesId(r.id)}
+                          className="px-3 py-1.5 ml-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 rounded transition-colors text-xs font-bold"
+                        >
+                          {r.salesConfirmed ? 'Edit Sales' : 'Input Sales'}
+                        </button>
+                      {r.status === 'AMENDMENT_REQUESTED' && !r.auditorAmendmentApproval && (
+                        <button 
+                          onClick={() => updateStatus(r.id, 'AMENDMENT_APPROVED', r)}
+                          className="px-3 py-1.5 ml-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-400 rounded transition-colors text-xs font-bold"
+                        >
+                          Approve Amendment
                         </button>
                       )}
                     </td>
@@ -313,6 +351,18 @@ export function AuditorDashboard() {
         
       </div>
       <CashierShortageChart reconciliations={filteredRecon} branches={branches} />
+      {editingSalesId && (
+        <InputSalesModal 
+          currentUser={user}
+          reconciliation={reconciliations.find(r => r.id === editingSalesId)} 
+          rates={rates} 
+          onClose={() => setEditingSalesId(null)}
+          onUpdate={() => {
+            setEditingSalesId(null);
+            loadData();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -356,5 +406,167 @@ const BreakdownSection = ({ title, items }: { title: string, items: any }) => {
         ))}
       </div>
     </div>
+  );
+};
+function InputSalesModal({ currentUser, reconciliation, rates, onClose, onUpdate }: any) {
+  const [salesItems, setSalesItems] = useState<any[]>(
+    Array.isArray(reconciliation.totalSales) && reconciliation.totalSales.length > 0 
+      ? JSON.parse(JSON.stringify(reconciliation.totalSales))
+      : [{ id: Math.random().toString(), reconciliationId: reconciliation.id, description: 'Total Sales', amount: 0, currencyCode: 'USD', usdEquivalent: 0 }]
+  );
+  const [loading, setLoading] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const currencies = rates.map((r: any) => r.currencyCode);
+
+  const handleItemChange = (index: number, field: string, value: any) => {
+    const newItems = [...salesItems];
+    newItems[index][field] = value;
+    if (field === 'amount' || field === 'currencyCode') {
+      const code = field === 'currencyCode' ? value : newItems[index].currencyCode;
+      const amt = field === 'amount' ? value : newItems[index].amount;
+      const rate = (rates || []).find((r: any) => r.currencyCode === code)?.rateToUsd || 1;
+      newItems[index].usdEquivalent = parseFloat(amt) * rate;
+    }
+    setSalesItems(newItems);
+  };
+
+  const addItem = () => {
+    setSalesItems([...salesItems, { id: Math.random().toString(), reconciliationId: reconciliation.id, description: 'Sales Entry', amount: 0, currencyCode: 'USD', usdEquivalent: 0 }]);
+  };
+
+  const removeItem = (idx: number) => {
+    setSalesItems(salesItems.filter((_, i) => i !== idx));
+  };
+
+  const handleSave = async (confirmEntry: boolean = false) => {
+    if (confirmEntry && !showConfirm) {
+      setShowConfirm(true);
+      return;
+    }
+    setLoading(true);
+    try {
+      const totalSalesUsd = salesItems.reduce((acc, curr) => acc + (curr.usdEquivalent || 0), 0);
+      
+      const tDeductions = (Array.isArray(reconciliation.debtors) ? reconciliation.debtors.reduce((a:number,b:any)=>a+(b.usdEquivalent||0),0) : reconciliation.debtors?.usdEquivalent || 0) +
+                          (Array.isArray(reconciliation.depositClaims) ? reconciliation.depositClaims.reduce((a:number,b:any)=>a+(b.usdEquivalent||0),0) : reconciliation.depositClaims?.usdEquivalent || 0) +
+                          (Array.isArray(reconciliation.returnsRefunds) ? reconciliation.returnsRefunds.reduce((a:number,b:any)=>a+(b.usdEquivalent||0),0) : reconciliation.returnsRefunds?.usdEquivalent || 0) +
+                          (Array.isArray(reconciliation.expenses) ? reconciliation.expenses.reduce((a:number,b:any)=>a+(b.usdEquivalent||0),0) : reconciliation.expenses?.usdEquivalent || 0) +
+                          (Array.isArray(reconciliation.purchases) ? reconciliation.purchases.reduce((a:number,b:any)=>a+(b.usdEquivalent||0),0) : reconciliation.purchases?.usdEquivalent || 0);
+
+      const totalDeposits = Array.isArray(reconciliation.depositsReceived) ? reconciliation.depositsReceived.reduce((a:number,b:any)=>a+(b.usdEquivalent||0),0) : reconciliation.depositsReceived?.usdEquivalent || 0;
+
+      const expected = totalSalesUsd + totalDeposits - tDeductions;
+      const actCash = reconciliation.endOfDayCash.usdEquivalent || 0;
+      const variance = actCash - expected;
+
+      await api.put(`/reconciliations/${reconciliation.id}`, { 
+        totalSales: salesItems,
+        expectedCashUsd: expected,
+        varianceUsd: variance,
+        ...(confirmEntry ? { salesConfirmed: true } : {}),
+        salesInputtedBy: currentUser?.id,
+        salesInputtedByName: currentUser?.name,
+      });
+      onUpdate();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+    >
+      <motion.div 
+        initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
+        className="bg-[#0a192f] border border-[#1e345e] rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl"
+      >
+        <div className="px-6 py-4 border-b border-[#1e345e] flex justify-between items-center bg-[#112240]">
+          <h2 className="text-lg font-bold text-white tracking-tight">Input Total Sales (For Next Day)</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-white">&times;</button>
+        </div>
+        
+        <div className="p-4 sm:p-6 max-h-[60vh] overflow-y-auto space-y-4">
+          <div className="bg-[#061121] p-3 rounded-lg border border-emerald-500/20 text-emerald-400 text-sm mb-4">
+            Inputting total sales for reconciliation on <strong>{reconciliation.date}</strong>.
+          </div>
+          
+          {salesItems.map((item, idx) => (
+            <div key={idx} className="flex flex-col sm:flex-row items-center gap-3">
+              <input 
+                type="text" 
+                value={item.description} 
+                onChange={e => handleItemChange(idx, 'description', e.target.value)}
+                className="w-full sm:w-1/3 bg-[#061121] border border-[#1e345e] rounded-lg p-2 text-white text-sm"
+                placeholder="Description (e.g. Sales)" 
+              />
+              <div className="flex gap-2 w-full sm:w-2/3">
+                <input 
+                  type="number" step="0.01" min="0"
+                  value={item.amount === 0 && item.description === '' ? '' : item.amount} 
+                  onChange={e => handleItemChange(idx, 'amount', e.target.value.replace(/^0+(?=\d)/, ''))}
+                  className="w-full bg-[#061121] border border-[#1e345e] rounded-lg p-2 text-white text-sm text-right font-mono"
+                  placeholder="Amount" 
+                />
+                <select 
+                  value={item.currencyCode} 
+                  onChange={e => handleItemChange(idx, 'currencyCode', e.target.value)}
+                  className="w-24 bg-[#112240] border border-[#1e345e] rounded-lg p-2 text-white text-sm"
+                >
+                  {currencies.map((c: string) => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <div className="w-24 text-right pt-2 text-slate-400 font-mono text-sm self-center">
+                  ${(item.usdEquivalent || 0).toFixed(2)}
+                </div>
+                <button type="button" onClick={() => removeItem(idx)} className="p-2 text-rose-400 hover:bg-rose-500/10 rounded-lg shrink-0">
+                  <AlertOctagon className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          ))}
+          <button type="button" onClick={addItem} className="text-emerald-400 text-sm font-bold mt-2 hover:underline">
+            + Add Line Item
+          </button>
+        </div>
+
+        <div className="p-4 border-t border-[#1e345e] bg-[#112240] flex justify-end gap-3 items-center">
+          {showConfirm ? (
+            <>
+              <span className="text-rose-400 text-sm font-bold mr-auto">Are you sure? This action is permanent.</span>
+              <button disabled={loading} onClick={() => setShowConfirm(false)} className="px-4 py-2 text-slate-400 hover:text-white text-sm font-medium transition-colors">Cancel</button>
+              <button 
+                disabled={loading}
+                onClick={() => handleSave(true)} 
+                className="px-6 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-lg text-sm font-bold transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                Yes, Lock Sales
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={onClose} className="px-4 py-2 text-slate-400 hover:text-white text-sm font-medium transition-colors">Cancel</button>
+              <button 
+                disabled={loading}
+                onClick={() => handleSave(false)} 
+                className="px-6 py-2 bg-[#1e345e] hover:bg-[#2a457e] text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                Save Draft
+              </button>
+              <button 
+                disabled={loading}
+                onClick={() => handleSave(true)} 
+                className="px-6 py-2 bg-emerald-500 hover:bg-emerald-600 text-[#0a192f] rounded-lg text-sm font-bold transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                Confirm & Lock Sales
+              </button>
+            </>
+          )}
+        
+</div>
+      </motion.div>
+    </motion.div>
   );
 };

@@ -1,12 +1,10 @@
 const fs = require('fs');
-let code = fs.readFileSync('src/lib/types.ts', 'utf8');
+let content = fs.readFileSync('src/lib/types.ts', 'utf8');
 
-code = code.replace(
-`  amount: number | string;
-  currencyCode: string;`,
-`  amount: number | string;
-  amountZar?: number | string;
-  currencyCode: string;`
+content = content.replace(
+  "salesConfirmed?: boolean;",
+  "salesConfirmed?: boolean;\n  salesInputtedBy?: string;\n  salesInputtedByName?: string;\n  auditorAmendmentApproval?: boolean;\n  accountantAmendmentApproval?: boolean;"
 );
 
-fs.writeFileSync('src/lib/types.ts', code);
+fs.writeFileSync('src/lib/types.ts', content);
+console.log("Patched types");

@@ -45,8 +45,16 @@ export function AccountantDashboard() {
     }
   };
 
-  const updateStatus = async (id: string, status: string) => {
-    await api.put(`/reconciliations/${id}`, { status });
+  const updateStatus = async (id: string, status: string, recon?: any) => {
+    if (status === 'AMENDMENT_APPROVED' && recon) {
+      const updates: any = { accountantAmendmentApproval: true };
+      if (recon.auditorAmendmentApproval) {
+        updates.status = 'AMENDMENT_APPROVED';
+      }
+      await api.put(`/reconciliations/${id}`, updates);
+    } else {
+      await api.put(`/reconciliations/${id}`, { status });
+    }
     loadData();
   };
 
@@ -307,7 +315,10 @@ export function AccountantDashboard() {
                       </button>
                     </td>
                     <td className="px-6 py-4 font-medium text-white">{(branches || []).find(b => b.id === r.branchId)?.name || r.branchId}</td>
-                    <td className="px-6 py-4 text-slate-300">{format(new Date(r.date), 'MMM d, yyyy')}</td>
+                    <td className="px-6 py-4 text-slate-300">
+                      <div>{format(new Date(r.date), 'MMM d, yyyy')}</div>
+                      {r.salesInputtedByName && <div className="text-[10px] text-emerald-400 font-bold mt-1">Sales by: {r.salesInputtedByName}</div>}
+                    </td>
                     <td className="px-6 py-4 text-right font-mono">${(Array.isArray(r.totalSales) ? r.totalSales.reduce((a:number,b:any)=>a+(b.usdEquivalent||0),0) : (r.totalSales?.usdEquivalent || 0)).toFixed(2)}</td>
                     <td className="px-6 py-4 text-right font-mono">${(r.endOfDayCash?.usdEquivalent || 0).toFixed(2)}</td>
                     <td className={clsx("px-6 py-4 text-right font-mono font-bold", 
@@ -326,11 +337,9 @@ export function AccountantDashboard() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right space-x-2 flex justify-end">
-                      {!r.salesConfirmed && (
-                        <button onClick={() => setEditingSalesId(r.id)} className="px-3 py-1 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 rounded text-xs font-bold transition-colors">
-                          Input Sales
+                      <button onClick={() => setEditingSalesId(r.id)} className="px-3 py-1 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 rounded text-xs font-bold transition-colors">
+                          {r.salesConfirmed ? 'Edit Sales' : 'Input Sales'}
                         </button>
-                      )}
                       {r.status === 'PENDING' && (
                         <>
                           <button onClick={() => updateStatus(r.id, 'APPROVED')} className="p-1.5 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded-md transition-colors" title="Approve">
@@ -346,8 +355,8 @@ export function AccountantDashboard() {
                           Approve Unlock
                         </button>
                       )}
-                      {r.status === 'AMENDMENT_REQUESTED' && (
-                        <button onClick={() => updateStatus(r.id, 'AMENDMENT_APPROVED')} className="px-3 py-1 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 rounded text-xs font-bold transition-colors">
+                      {r.status === 'AMENDMENT_REQUESTED' && !r.accountantAmendmentApproval && (
+                        <button onClick={() => updateStatus(r.id, 'AMENDMENT_APPROVED', r)} className="px-3 py-1 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 rounded text-xs font-bold transition-colors">
                           Approve Amendment
                         </button>
                       )}
@@ -638,7 +647,7 @@ const BreakdownSection = ({ title, items }: { title: string, items: any }) => {
   );
 }
 
-function InputSalesModal({ reconciliation, rates, onClose, onUpdate }: any) {
+function InputSalesModal({ currentUser, reconciliation, rates, onClose, onUpdate }: any) {
   const [salesItems, setSalesItems] = useState<any[]>(
     Array.isArray(reconciliation.totalSales) && reconciliation.totalSales.length > 0 
       ? JSON.parse(JSON.stringify(reconciliation.totalSales))
@@ -693,7 +702,9 @@ function InputSalesModal({ reconciliation, rates, onClose, onUpdate }: any) {
         totalSales: salesItems,
         expectedCashUsd: expected,
         varianceUsd: variance,
-        ...(confirmEntry ? { salesConfirmed: true } : {})
+        ...(confirmEntry ? { salesConfirmed: true } : {}),
+        salesInputtedBy: currentUser?.id,
+        salesInputtedByName: currentUser?.name,
       });
       onUpdate();
     } catch (e) {

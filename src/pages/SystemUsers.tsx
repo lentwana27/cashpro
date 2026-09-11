@@ -238,7 +238,9 @@ export function SystemUsers() {
                     
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
-                      {(currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPERVISOR' || currentUser?.role === 'AUDITOR') && (
+                      {((currentUser?.role === 'ADMIN') || 
+                         (currentUser?.role === 'SUPERVISOR' && u.role === 'CASHIER') || 
+                         (currentUser?.role === 'AUDITOR' && (u.role === 'CASHIER' || u.role === 'SUPERVISOR'))) && (
                         <>
                           <button 
                             onClick={() => {
@@ -252,7 +254,7 @@ export function SystemUsers() {
                             <Pencil className="w-4 h-4" />
                           </button>
                           
-                          {(currentUser?.role === 'ADMIN' || currentUser?.role === 'AUDITOR') && (
+                          {currentUser?.role === 'ADMIN' && (
                             <button 
                               onClick={() => handleTransferToAudit(u.id)}
                               className="p-1.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 rounded-lg transition-colors"
@@ -430,7 +432,7 @@ export function SystemUsers() {
                 >
                   <option value="CASHIER">Till Operator (Cashier)</option>
                   <option value="SUPERVISOR">Supervisor</option>
-                  {(currentUser?.role === 'ADMIN' || currentUser?.role === 'AUDITOR') && (
+                  {currentUser?.role === 'ADMIN' && (
                     <>
                       <option value="ACCOUNTANT">Accountant</option>
                       <option value="HEAD_ACCOUNTANT">Head Accountant</option>

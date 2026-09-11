@@ -60,6 +60,10 @@ export const reconciliations = pgTable('reconciliations', {
   supervisorId: text('supervisor_id').notNull(),
   date: text('date').notNull(),
   salesConfirmed: boolean('sales_confirmed').default(false),
+  salesInputtedBy: text('sales_inputted_by'),
+  salesInputtedByName: text('sales_inputted_by_name'),
+  auditorAmendmentApproval: boolean('auditor_amendment_approval').default(false),
+  accountantAmendmentApproval: boolean('accountant_amendment_approval').default(false),
   
   totalSales: jsonb('total_sales'),
   depositsReceived: jsonb('deposits_received'),

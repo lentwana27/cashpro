@@ -85,6 +85,10 @@ export interface DailyReconciliation {
   supervisorId: string;
   date: string; // YYYY-MM-DD
   salesConfirmed?: boolean;
+  salesInputtedBy?: string;
+  salesInputtedByName?: string;
+  auditorAmendmentApproval?: boolean;
+  accountantAmendmentApproval?: boolean;
   
   // Income
   totalSales: ReconLineItem[];

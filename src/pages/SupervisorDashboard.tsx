@@ -297,7 +297,7 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
       </div>
 
       {isEnteringSalesFor ? (
-        <MissingSalesForm
+        <MissingSalesForm currentUser={user}
           recon={isEnteringSalesFor}
           rates={rates}
           branch={branch}
@@ -446,7 +446,7 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
           )}
         </div>
       ) : isCashUpMode ? (
-        <CashUpForm
+        <CashUpForm currentUser={user}
           cashiers={cashiers}
           branch={branch}
           branchId={(branchIdOverride || user?.branchId)}
@@ -969,7 +969,7 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
   );
 }
 
-function CashUpForm({
+function CashUpForm({ currentUser,
   branch,
   cashiers = [],
   branchId,
@@ -1229,6 +1229,8 @@ function CashUpForm({
       notes,
       signature,
       salesConfirmed: existingData?.salesConfirmed || false,
+      salesInputtedBy: existingData?.salesInputtedBy || currentUser?.id,
+      salesInputtedByName: existingData?.salesInputtedByName || currentUser?.name,
     };
 
     if (existingData?.id) {
@@ -1598,7 +1600,7 @@ function CashUpForm({
   );
 }
 
-function MissingSalesForm({ recon, rates, branch, cashiers, onCancel, onSuccess }: any) {
+function MissingSalesForm({ currentUser, recon, rates, branch, cashiers, onCancel, onSuccess }: any) {
     const cashBreakdown = recon?.tillCashBreakdown || [];
   const tillNames =
     branch?.hasTills && branch.tills?.length > 0
@@ -1691,6 +1693,8 @@ function MissingSalesForm({ recon, rates, branch, cashiers, onCancel, onSuccess 
         varianceUsd: variance,
         tillVariances: computedTillVariances,
         salesConfirmed: true,
+        salesInputtedBy: recon.salesInputtedBy || currentUser?.id,
+        salesInputtedByName: recon.salesInputtedByName || currentUser?.name,
       });
       onSuccess();
     } catch (err) {
