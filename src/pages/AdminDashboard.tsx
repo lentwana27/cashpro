@@ -131,7 +131,7 @@ export function AdminDashboard() {
       setNewBranchForm({ name: '', location: '', lat: 0, lng: 0, code: '', hasTills: false, tills: [] });
       loadData();
     } catch (e: any) {
-      alert(e.response?.data?.error || e.message || 'Failed to create branch');
+      alert(e.message || 'Failed to create branch');
     }
   };
 

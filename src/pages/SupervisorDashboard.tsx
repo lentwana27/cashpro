@@ -31,6 +31,12 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
   const [branches, setBranches] = useState<any[]>([]);
   const [cashiers, setCashiers] = useState<any[]>([]);
 
+  const earliestReconDate = useMemo(() => {
+    if (history.length === 0) return format(new Date(), "yyyy-MM-dd");
+    const sortedDates = history.map(r => r.date).sort();
+    return sortedDates[0];
+  }, [history]);
+
   const [isEditing, setIsEditing] = useState(false);
   const [isCashUpMode, setIsCashUpMode] = useState(false);
   const [showQuickLog, setShowQuickLog] = useState(false);
@@ -126,16 +132,16 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
       setRates(ratesData);
             try {
         const u = await api.get('/users');
-        setCashiers(u.filter((x: any) => x.role === 'CASHIER' && x.branchId === (branchIdOverride || user?.branchId)));
+        setCashiers((u || []).filter((x: any) => x.role === 'CASHIER' && x.branchId === (branchIdOverride || user?.branchId)));
       } catch (e) {}
       
       if ((branchIdOverride || user?.branchId) && locsData)
-        setBranch(locsData.find((b: any) => b.id === (branchIdOverride || user?.branchId)));
+        setBranch((locsData || []).find((b: any) => b.id === (branchIdOverride || user?.branchId)));
 
-      const branchRecs = recsData.filter(
+      const branchRecs = (recsData || []).filter(
         (r: any) => r.branchId === (branchIdOverride || user?.branchId),
       );
-      const todayRec = branchRecs.find((r: any) => r.date === date);
+      const todayRec = (branchRecs || []).find((r: any) => r.date === date);
       setHistory(
         branchRecs.sort(
           (a: any, b: any) =>
@@ -286,6 +292,7 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
           </div>
           <input
             type="date"
+            min={earliestReconDate}
             value={date}
             onChange={(e) => {
               setDate(e.target.value);
@@ -318,14 +325,13 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
           </h2>
           <p className="text-slate-400 mb-8">
             You skipped the daily cash-up for{" "}
-            {format(new Date(date), "MMMM do, yyyy")}. You must request
-            permission from the accountant to unlock this date.
+            {format(new Date(date), "MMMM do, yyyy")}. You can now fill in the reconciliation for this date.
           </p>
           <button
-            onClick={() => requestUnlock(date)}
-            className="px-8 py-3 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl shadow-lg transition-colors"
+            onClick={() => setIsCashUpMode(true)}
+            className="px-8 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl shadow-lg transition-colors"
           >
-            Request Unlock
+            Start Missing Cash-Up
           </button>
         </div>
       ) : submitted && submitted.status === "UNLOCK_REQUESTED" ? (
@@ -413,7 +419,7 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
                 Amendment History
               </h3>
               <div className="space-y-3">
-                {submitted.amendmentNotes.map((note: string, idx: number) => (
+                {(submitted.amendmentNotes || []).map((note: string, idx: number) => (
                   <div
                     key={idx}
                     className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-500/90 p-3 rounded-lg text-sm leading-relaxed font-medium"
@@ -679,14 +685,14 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
                                   };
                                   const tSales = getSum(r.totalSales);
                                   const tDeps = getSum(r.depositsReceived);
-                                  const totalIncome = tSales + tDeps;
+                                  const totalIncome = tSales + tDeps + getSum(r.manualSalesToday);
                                   
                                   const tDebtors = getSum(r.debtors);
                                   const tDepClaims = getSum(r.depositClaims);
                                   const tRet = getSum(r.returnsRefunds);
                                   const tExp = getSum(r.expenses);
                                   const tPur = getSum(r.purchases);
-                                  const totalDeductions = tDebtors + tDepClaims + tRet + tExp + tPur;
+                                  const totalDeductions = tDebtors + tDepClaims + tRet + tExp + tPur + getSum(r.manualSalesPrevious);
                                   
                                   const expected = totalIncome - totalDeductions;
                                   const actualCash = getSum(r.tillCashBreakdown);
@@ -700,6 +706,7 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
                                           <div className="space-y-4">
                                             <BreakdownSection title="Total Sales" items={r.totalSales} />
                                             <BreakdownSection title="Deposits Received" items={r.depositsReceived} />
+                                            <BreakdownSection title="Manual Sales Not Captured Today" items={r.manualSalesToday} />
                                           </div>
                                           <div className="mt-4 pt-3 border-t-2 border-double border-emerald-500/30 flex justify-between font-bold text-sm text-emerald-400">
                                             <span>Total Income</span>
@@ -715,6 +722,7 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
                                             <BreakdownSection title="Returns / Refunds" items={r.returnsRefunds} />
                                             <BreakdownSection title="Operational Expenses" items={r.expenses} />
                                             <BreakdownSection title="Purchases" items={r.purchases} />
+                                            <BreakdownSection title="Manual Sales for Previous Days" items={r.manualSalesPrevious} />
                                           </div>
                                           <div className="mt-4 pt-3 border-t-2 border-double border-rose-500/30 flex justify-between font-bold text-sm text-rose-400">
                                             <span>Total Deductions</span>
@@ -746,7 +754,7 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
                                           {r.amendmentNotes && r.amendmentNotes.length > 0 && (
                                             <div className="mb-4 space-y-2">
                                               <p className="text-xs text-slate-500 mb-1">Amendment History</p>
-                                              {r.amendmentNotes.map((note: string, i: number) => (
+                                              {(r.amendmentNotes || []).map((note: string, i: number) => (
                                                 <div key={i} className="text-sm text-yellow-500/90 bg-yellow-500/10 p-3 rounded-lg border border-yellow-500/20 leading-relaxed font-medium">
                                                   {note}
                                                 </div>
@@ -1016,6 +1024,12 @@ function CashUpForm({ currentUser,
   const [deposits, setDeposits] = useState<ReconLineItem[]>(
     ensureArray(existingData?.depositsReceived, ["Deposits Received"]),
   );
+  const [manualSalesToday, setManualSalesToday] = useState<ReconLineItem[]>(
+    existingData?.manualSalesToday?.length > 0
+      ? existingData.manualSalesToday
+      : [createItem("")],
+  );
+  
   const [debtors, setDebtors] = useState<ReconLineItem[]>(
     ensureArray(existingData?.debtors, ["Debtors (Credit Sales)"]),
   );
@@ -1033,6 +1047,11 @@ function CashUpForm({ currentUser,
   const [purchases, setPurchases] = useState<ReconLineItem[]>(
     existingData?.purchases?.length > 0
       ? existingData.purchases
+      : [createItem("")],
+  );
+  const [manualSalesPrevious, setManualSalesPrevious] = useState<ReconLineItem[]>(
+    existingData?.manualSalesPrevious?.length > 0
+      ? existingData.manualSalesPrevious
       : [createItem("")],
   );
   const [cashBreakdown, setCashBreakdown] = useState<ReconLineItem[]>(
@@ -1053,6 +1072,11 @@ function CashUpForm({ currentUser,
       setDeposits(
         ensureArray(existingData.depositsReceived, ["Deposits Received"]),
       );
+      setManualSalesToday(
+        existingData.manualSalesToday?.length > 0
+          ? existingData.manualSalesToday
+          : [createItem("")]
+      );
       setDebtors(ensureArray(existingData.debtors, ["Debtors (Credit Sales)"]));
       setDepositClaims(
         ensureArray(existingData.depositClaims, ["Deposit Claims"]),
@@ -1069,6 +1093,11 @@ function CashUpForm({ currentUser,
         existingData.purchases?.length > 0
           ? existingData.purchases
           : [createItem("")],
+      );
+      setManualSalesPrevious(
+        existingData.manualSalesPrevious?.length > 0
+          ? existingData.manualSalesPrevious
+          : [createItem("")]
       );
       setCashBreakdown(
         existingData.tillCashBreakdown || ensureArray(undefined, cashTillNames),
@@ -1156,13 +1185,13 @@ function CashUpForm({ currentUser,
 
   const calcTotals = () => {
     const cashTotalUsd = getSum(cashBreakdown);
-    const tSales = getSum(sales) + getSum(deposits);
+    const tSales = getSum(sales) + getSum(deposits) + getSum(manualSalesToday);
     const tDeductions =
       getSum(debtors) +
       getSum(depositClaims) +
       getSum(returns) +
       getSum(expenses) +
-      getSum(purchases);
+      getSum(purchases) + getSum(manualSalesPrevious);
     const expected = tSales - tDeductions;
     const variance = cashTotalUsd - expected;
     return { expected, variance, cashTotalUsd };
@@ -1211,6 +1240,7 @@ function CashUpForm({ currentUser,
       date,
       totalSales: sales,
       depositsReceived: deposits,
+      manualSalesToday: manualSalesToday.filter((e: any) => e.description || parseFloat(e.amount) > 0),
       debtors,
       returnsRefunds: returns,
       depositClaims,
@@ -1220,6 +1250,7 @@ function CashUpForm({ currentUser,
       purchases: purchases.filter(
         (e: any) => e.description || parseFloat(e.amount) > 0,
       ),
+      manualSalesPrevious: manualSalesPrevious.filter((e: any) => e.description || parseFloat(e.amount) > 0),
       endOfDayCash,
       tillCashBreakdown: cashBreakdown,
       expectedCashUsd: expected,
@@ -1296,6 +1327,7 @@ function CashUpForm({ currentUser,
               <div className="space-y-4 pt-2">
                 <PreviewList title="Sales" items={sales} />
                 <PreviewList title="Deposits Received" items={deposits} />
+                <PreviewList title="Manual Sales Not Captured Today (Adds to Expected)" items={manualSalesToday} />
               </div>
             </div>
             <div>
@@ -1308,6 +1340,7 @@ function CashUpForm({ currentUser,
                 <PreviewList title="Returns / Refunds" items={returns} />
                 <PreviewList title="Expenses" items={expenses} />
                 <PreviewList title="Purchases" items={purchases} />
+                <PreviewList title="Manual Sales for Previous Days (Deducts from Expected)" items={manualSalesPrevious} />
               </div>
             </div>
           </div>
@@ -1440,6 +1473,13 @@ function CashUpForm({ currentUser,
             currencies={currencies}
             getUsd={getUsd}
           />
+          <ReconListField
+            title="Manual Sales Not Captured Today (Adds to Expected)"
+            items={manualSalesToday}
+            setItems={setManualSalesToday}
+            currencies={currencies}
+            getUsd={getUsd}
+          />
         </div>
       </div>
 
@@ -1485,6 +1525,14 @@ function CashUpForm({ currentUser,
             setItems={setPurchases}
             currencies={currencies}
             getUsd={getUsd}
+          />
+          <ReconListField
+            title="Manual Sales for Previous Days (Deducts from Expected)"
+            items={manualSalesPrevious}
+            setItems={setManualSalesPrevious}
+            currencies={currencies}
+            getUsd={getUsd}
+            hasDate={true}
           />
         </div>
       </div>
@@ -1662,13 +1710,13 @@ function MissingSalesForm({ currentUser, recon, rates, branch, cashiers, onCance
         return arr.usdEquivalent || 0;
       };
 
-      const tSales = getSum(updatedTotalSales) + getSum(recon.depositsReceived);
+      const tSales = getSum(updatedTotalSales) + getSum(recon.depositsReceived) + getSum(recon.manualSalesToday);
       const tDeductions =
         getSum(recon.debtors) +
         getSum(recon.depositClaims) +
         getSum(recon.returnsRefunds) +
         getSum(recon.expenses) +
-        getSum(recon.purchases);
+        getSum(recon.purchases) + getSum(recon.manualSalesPrevious);
       const expected = tSales - tDeductions;
       const cashTotalUsd = recon.endOfDayCash?.usdEquivalent || 0;
       const variance = cashTotalUsd - expected;
@@ -1787,6 +1835,7 @@ function ReconField({
   currencies,
   onChange,
   showCashierName,
+  hasDate,
 }: any) {
   return (
     <div className="flex flex-col gap-4 bg-[#112240] p-4 rounded-xl border border-[#1e345e]">
@@ -1837,7 +1886,19 @@ function ReconField({
           </span>
         </div>
       </div>
-      {showCashierName && (
+      {hasDate && (
+                <input
+                  type="date"
+                  value={item.date || ""}
+                  onChange={(e) => {
+                    const newArr = [...items];
+                    newArr[idx].date = e.target.value;
+                    setItems(newArr);
+                  }}
+                  className="w-full bg-[#061121] text-xs text-blue-300 focus:outline-none mb-2 border border-[#1e345e] p-1.5 rounded"
+                />
+              )}
+              {showCashierName && (
         <div className="w-full sm:w-1/2">
           <input
             type="text"
@@ -1863,6 +1924,7 @@ function PhysicalCashListField({
   setItems,
   getUsd,
   showCashierName,
+  hasDate,
   cashiers = [],
   hiddenIndices = []
 }: any) {
@@ -1918,6 +1980,18 @@ function PhysicalCashListField({
                 className="w-full bg-transparent text-sm text-white focus:outline-none mb-1 font-medium"
               />
               
+              {hasDate && (
+                <input
+                  type="date"
+                  value={item.date || ""}
+                  onChange={(e) => {
+                    const newArr = [...items];
+                    newArr[idx].date = e.target.value;
+                    setItems(newArr);
+                  }}
+                  className="w-full bg-[#061121] text-xs text-blue-300 focus:outline-none mb-2 border border-[#1e345e] p-1.5 rounded"
+                />
+              )}
               {showCashierName && (
                 <select
                   required
@@ -2035,6 +2109,7 @@ function ReconListField({
   currencies,
   getUsd,
   showCashierName,
+  hasDate,
   cashiers = [],
   hiddenIndices = []
 }: any) {
@@ -2102,7 +2177,19 @@ function ReconListField({
                 placeholder="Invoice # (Optional)..."
                 className="w-full bg-transparent text-xs text-slate-400 focus:outline-none mb-2"
               />
-                            {showCashierName && (
+                            {hasDate && (
+                <input
+                  type="date"
+                  value={item.date || ""}
+                  onChange={(e) => {
+                    const newArr = [...items];
+                    newArr[idx].date = e.target.value;
+                    setItems(newArr);
+                  }}
+                  className="w-full bg-[#061121] text-xs text-blue-300 focus:outline-none mb-2 border border-[#1e345e] p-1.5 rounded"
+                />
+              )}
+              {showCashierName && (
                 <select
                   required
                   value={item.cashierId || ""}
@@ -2221,7 +2308,7 @@ function PreviewList({ title, items }: { title: string; items: any[] }) {
         {validItems.map((item, idx) => (
           <div key={idx} className="flex justify-between text-xs">
             <span className="text-slate-400">
-              {item.description || "Unnamed"}
+              {item.description || "Unnamed"}{item.date ? ` [${item.date}]` : ""}
               {item.cashierName && (
                 <span className="text-blue-400 font-medium ml-1">
                   {" "}
@@ -2267,7 +2354,7 @@ const BreakdownSection = ({ title, items }: { title: string, items: any }) => {
         {arr.map((item: any, idx: number) => (
           <div key={idx} className="flex justify-between text-xs">
             <span className="text-slate-400">
-              {item.description || 'Unnamed'} 
+              {item.description || 'Unnamed'}{item.date ? ` [${item.date}]` : ""} 
               {(item.amount || item.amount === 0) && <span className="text-slate-500 ml-1">({item.amount} {item.currencyCode})</span>}
             </span>
             <span className="text-slate-300 font-mono">${(item.usdEquivalent||0).toFixed(2)}</span>

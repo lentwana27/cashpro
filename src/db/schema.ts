@@ -67,11 +67,13 @@ export const reconciliations = pgTable('reconciliations', {
   
   totalSales: jsonb('total_sales'),
   depositsReceived: jsonb('deposits_received'),
+  manualSalesToday: jsonb('manual_sales_today'),
   debtors: jsonb('debtors'),
   depositClaims: jsonb('deposit_claims'),
   returnsRefunds: jsonb('returns_refunds'),
   expenses: jsonb('expenses'),
   purchases: jsonb('purchases'),
+  manualSalesPrevious: jsonb('manual_sales_previous'),
   endOfDayCash: jsonb('end_of_day_cash'),
   tillCashBreakdown: jsonb('till_cash_breakdown'),
   tillVariances: jsonb('till_variances'),

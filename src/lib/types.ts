@@ -73,6 +73,7 @@ export interface ReconLineItem {
   invoiceNumber?: string;
   cashierName?: string;
   category?: string;
+  date?: string;
   amount: number | string;
   amountZar?: number | string;
   currencyCode: string;
@@ -93,6 +94,7 @@ export interface DailyReconciliation {
   // Income
   totalSales: ReconLineItem[];
   depositsReceived: ReconLineItem[];
+  manualSalesToday?: ReconLineItem[];
   
   // Deductions
   debtors: ReconLineItem[];
@@ -100,6 +102,7 @@ export interface DailyReconciliation {
   returnsRefunds: ReconLineItem[];
   expenses: ReconLineItem[];
   purchases: ReconLineItem[];
+  manualSalesPrevious?: ReconLineItem[];
   
   // Cash
   endOfDayCash: ReconLineItem;

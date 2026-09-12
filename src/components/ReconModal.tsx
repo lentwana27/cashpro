@@ -22,7 +22,7 @@ const BreakdownSection = ({ title, items }: { title: string, items: any }) => {
         {arr.map((item: any, idx: number) => (
           <div key={idx} className="flex justify-between text-xs">
             <span className="text-slate-400">
-              {item.description || 'Unnamed'} 
+              {item.description || 'Unnamed'}{item.date ? ` [${item.date}]` : ""} 
               {(item.amount || item.amount === 0) && <span className="text-slate-500 ml-1">({item.amount} {item.currencyCode})</span>}
             </span>
             <span className="text-slate-300 font-mono">${(item.usdEquivalent||0).toFixed(2)}</span>
@@ -79,6 +79,7 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
             <div className="space-y-4">
               <BreakdownSection title="Total Sales" items={localRecon.totalSales} />
               <BreakdownSection title="Deposits Received" items={localRecon.depositsReceived} />
+              <BreakdownSection title="Manual Sales Not Captured Today" items={localRecon.manualSalesToday} />
             </div>
           </div>
           <div>
@@ -89,6 +90,7 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
               <BreakdownSection title="Returns / Refunds" items={localRecon.returnsRefunds} />
               <BreakdownSection title="Expenses" items={localRecon.expenses} />
               <BreakdownSection title="Purchases" items={localRecon.purchases} />
+              <BreakdownSection title="Manual Sales for Previous Days" items={localRecon.manualSalesPrevious} />
             </div>
           </div>
         </div>
@@ -197,7 +199,7 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
             {localRecon.amendmentNotes && localRecon.amendmentNotes.length > 0 && (
               <div className="mb-4 space-y-2">
                 <p className="text-xs text-slate-500 mb-1">Amendment History</p>
-                {localRecon.amendmentNotes.map((note: string, i: number) => (
+                {(localRecon.amendmentNotes || []).map((note: string, i: number) => (
                   <div key={i} className="text-sm text-yellow-500/90 bg-yellow-500/10 p-3 rounded-lg border border-yellow-500/20 leading-relaxed font-medium">
                     {note}
                   </div>

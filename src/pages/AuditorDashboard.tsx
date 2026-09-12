@@ -28,9 +28,9 @@ export function AuditorDashboard() {
         api.get('/reconciliations'),
         api.get('/branches')
       ]);
-      setRates(rtData.data);
-      setReconciliations(recData.data || recData);
-      setBranches(brData.data || brData);
+      setRates(rtData);
+      setReconciliations(recData);
+      setBranches(brData);
     } catch (e) {
       // Ignore network errors during polling
     }
@@ -240,14 +240,14 @@ export function AuditorDashboard() {
                                   };
                                   const tSales = getSum(r.totalSales);
                                   const tDeps = getSum(r.depositsReceived);
-                                  const totalIncome = tSales + tDeps;
+                                  const totalIncome = tSales + tDeps + getSum(r.manualSalesToday);
                                   
                                   const tDebtors = getSum(r.debtors);
                                   const tDepClaims = getSum(r.depositClaims);
                                   const tRet = getSum(r.returnsRefunds);
                                   const tExp = getSum(r.expenses);
                                   const tPur = getSum(r.purchases);
-                                  const totalDeductions = tDebtors + tDepClaims + tRet + tExp + tPur;
+                                  const totalDeductions = tDebtors + tDepClaims + tRet + tExp + tPur + getSum(r.manualSalesPrevious);
                                   
                                   const expected = totalIncome - totalDeductions;
                                   const actualCash = getSum(r.tillCashBreakdown);
@@ -261,6 +261,7 @@ export function AuditorDashboard() {
                                           <div className="space-y-4">
                                             <BreakdownSection title="Total Sales" items={r.totalSales} />
                                             <BreakdownSection title="Deposits Received" items={r.depositsReceived} />
+                                            <BreakdownSection title="Manual Sales Not Captured Today" items={r.manualSalesToday} />
                                           </div>
                                           <div className="mt-4 pt-3 border-t-2 border-double border-emerald-500/30 flex justify-between font-bold text-sm text-emerald-400">
                                             <span>Total Income</span>
@@ -276,6 +277,7 @@ export function AuditorDashboard() {
                                             <BreakdownSection title="Returns / Refunds" items={r.returnsRefunds} />
                                             <BreakdownSection title="Operational Expenses" items={r.expenses} />
                                             <BreakdownSection title="Purchases" items={r.purchases} />
+                                            <BreakdownSection title="Manual Sales for Previous Days" items={r.manualSalesPrevious} />
                                           </div>
                                           <div className="mt-4 pt-3 border-t-2 border-double border-rose-500/30 flex justify-between font-bold text-sm text-rose-400">
                                             <span>Total Deductions</span>
@@ -307,7 +309,7 @@ export function AuditorDashboard() {
                                           {r.amendmentNotes && r.amendmentNotes.length > 0 && (
                                             <div className="mb-4 space-y-2">
                                               <p className="text-xs text-slate-500 mb-1">Amendment History</p>
-                                              {r.amendmentNotes.map((note: string, i: number) => (
+                                              {(r.amendmentNotes || []).map((note: string, i: number) => (
                                                 <div key={i} className="text-sm text-yellow-500/90 bg-yellow-500/10 p-3 rounded-lg border border-yellow-500/20 leading-relaxed font-medium">
                                                   {note}
                                                 </div>
@@ -354,7 +356,7 @@ export function AuditorDashboard() {
       {editingSalesId && (
         <InputSalesModal 
           currentUser={user}
-          reconciliation={reconciliations.find(r => r.id === editingSalesId)} 
+          reconciliation={(reconciliations || []).find(r => r.id === editingSalesId)} 
           rates={rates} 
           onClose={() => setEditingSalesId(null)}
           onUpdate={() => {
@@ -398,7 +400,7 @@ const BreakdownSection = ({ title, items }: { title: string, items: any }) => {
         {arr.map((item: any, idx: number) => (
           <div key={idx} className="flex justify-between text-xs">
             <span className="text-slate-400">
-              {item.description || 'Unnamed'} 
+              {item.description || 'Unnamed'}{item.date ? ` [${item.date}]` : ""} 
               {(item.amount || item.amount === 0) && <span className="text-slate-500 ml-1">({item.amount} {item.currencyCode})</span>}
             </span>
             <span className="text-slate-300 font-mono">$${(item.usdEquivalent||0).toFixed(2)}</span>

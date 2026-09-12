@@ -25,7 +25,7 @@ export function SystemUsers() {
 
   useEffect(() => {
     loadUsersAndBranches();
-    const interval = setInterval(loadUsersAndBranches, 30000); // Polling for last seen
+    const interval = setInterval(loadUsersAndBranches, 5000); // Polling for last seen
     
 
   return () => clearInterval(interval);

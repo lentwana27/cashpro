@@ -25,7 +25,7 @@ export function TillOperators() {
       
       let filteredRecon = reconData;
       if (user?.role === 'SUPERVISOR') {
-        filteredRecon = reconData.filter((r: any) => r.branchId === user.branchId);
+        filteredRecon = (reconData || []).filter((r: any) => r.branchId === user.branchId);
       }
       
       setReconciliations(filteredRecon);

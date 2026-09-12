@@ -91,7 +91,7 @@ export function DirectorDashboard() {
     return val.usdEquivalent || 0;
   };
 
-  const totalSales = filteredReconciliations.reduce((acc, curr) => acc + getSumVal(curr.totalSales), 0);
+  const totalSales = filteredReconciliations.reduce((acc, curr) => acc + getSumVal(curr.totalSales) + getSumVal(curr.manualSalesToday), 0);
   const totalVariance = filteredReconciliations.reduce((acc, curr) => acc + curr.varianceUsd, 0);
   const totalExpenses = filteredReconciliations.reduce((acc, curr) => acc + getSumVal(curr.expenses), 0);
   const shortagesCount = filteredReconciliations.filter(r => r.varianceUsd < -0.01).length;
@@ -99,10 +99,10 @@ export function DirectorDashboard() {
   const charData = filteredReconciliations.reduce((acc: any[], curr) => {
     const existing = acc.find(a => a.date === curr.date);
     if (existing) {
-      existing.sales += getSumVal(curr.totalSales);
+      existing.sales += getSumVal(curr.totalSales) + getSumVal(curr.manualSalesToday);
       existing.variance += curr.varianceUsd;
     } else {
-      acc.push({ date: curr.date, sales: getSumVal(curr.totalSales), variance: curr.varianceUsd });
+      acc.push({ date: curr.date, sales: getSumVal(curr.totalSales) + getSumVal(curr.manualSalesToday), variance: curr.varianceUsd });
     }
     return acc;
   }, []).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -111,7 +111,7 @@ export function DirectorDashboard() {
     if (!acc[curr.branchId]) {
       acc[curr.branchId] = { branchId: curr.branchId, name: (branches || []).find(b => b.id === curr.branchId)?.name || curr.branchId, sales: 0, variance: 0, expenses: 0, shortageCount: 0 };
     }
-    acc[curr.branchId].sales += getSumVal(curr.totalSales);
+    acc[curr.branchId].sales += getSumVal(curr.totalSales) + getSumVal(curr.manualSalesToday);
     acc[curr.branchId].variance += curr.varianceUsd;
     acc[curr.branchId].expenses += getSumVal(curr.expenses);
     if (curr.varianceUsd < -0.01) {

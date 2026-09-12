@@ -45,6 +45,8 @@ export function SystemBranches() {
 
   useEffect(() => {
     loadData();
+    const interval = setInterval(loadData, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const getSupervisorsForBranch = (bId: string) => {

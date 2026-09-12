@@ -18,7 +18,7 @@ export function Layout({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (user?.branchId) {
       api.get('/branches').then(res => {
-        const branch = res.data.find((b: any) => b.id === user.branchId);
+        const branch = (res || []).find((b: any) => b.id === user.branchId);
         if (branch) setUserBranch(branch);
       }).catch(console.error);
     }

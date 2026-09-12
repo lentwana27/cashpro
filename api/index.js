@@ -84,13 +84,19 @@ var reconciliations = pgTable("reconciliations", {
   supervisorId: text("supervisor_id").notNull(),
   date: text("date").notNull(),
   salesConfirmed: boolean("sales_confirmed").default(false),
+  salesInputtedBy: text("sales_inputted_by"),
+  salesInputtedByName: text("sales_inputted_by_name"),
+  auditorAmendmentApproval: boolean("auditor_amendment_approval").default(false),
+  accountantAmendmentApproval: boolean("accountant_amendment_approval").default(false),
   totalSales: jsonb("total_sales"),
   depositsReceived: jsonb("deposits_received"),
+  manualSalesToday: jsonb("manual_sales_today"),
   debtors: jsonb("debtors"),
   depositClaims: jsonb("deposit_claims"),
   returnsRefunds: jsonb("returns_refunds"),
   expenses: jsonb("expenses"),
   purchases: jsonb("purchases"),
+  manualSalesPrevious: jsonb("manual_sales_previous"),
   endOfDayCash: jsonb("end_of_day_cash"),
   tillCashBreakdown: jsonb("till_cash_breakdown"),
   tillVariances: jsonb("till_variances"),
@@ -315,7 +321,15 @@ api.put("/rates/:code", async (req, res) => {
   }
 });
 api.get("/users", async (req, res) => {
-  const users2 = await db.select().from(users);
+  let users2 = await db.select().from(users);
+  const now = Date.now();
+  users2 = users2.map((u) => {
+    let online = false;
+    if (u.lastSeen) {
+      online = now - new Date(u.lastSeen).getTime() < 6e4;
+    }
+    return { ...u, isOnline: online };
+  });
   res.json(users2);
 });
 api.post("/users", async (req, res) => {
@@ -417,6 +431,25 @@ api.post("/reconciliations", async (req, res) => {
   res.json(recon);
 });
 api.put("/reconciliations/:id", async (req, res) => {
+  const uid = req.headers["x-user-id"];
+  const uname = req.headers["x-user-name"];
+  if (uid && uname) {
+    if (req.body.salesConfirmed === true) {
+      logAction(uid, uname, "CONFIRM SALES", `Locked sales for reconciliation ${req.params.id}`);
+    }
+    if (req.body.salesInputtedByName) {
+      logAction(uid, uname, "INPUT SALES", `Inputted sales for reconciliation ${req.params.id}`);
+    }
+    if (req.body.auditorAmendmentApproval) {
+      logAction(uid, uname, "AUDITOR AMENDMENT APPROVAL", `Auditor approved amendment for ${req.params.id}`);
+    }
+    if (req.body.accountantAmendmentApproval) {
+      logAction(uid, uname, "ACCT AMENDMENT APPROVAL", `Accountant approved amendment for ${req.params.id}`);
+    }
+    if (req.body.status) {
+      logAction(uid, uname, "UPDATE STATUS", `Status changed to ${req.body.status} for ${req.params.id}`);
+    }
+  }
   await db.update(reconciliations).set({ ...req.body, updatedAt: (/* @__PURE__ */ new Date()).toISOString() }).where(eq(reconciliations.id, req.params.id));
   const recs = await db.select().from(reconciliations).where(eq(reconciliations.id, req.params.id));
   res.json(recs[0] || {});

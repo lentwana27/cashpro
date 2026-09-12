@@ -202,7 +202,15 @@ api.put('/rates/:code', async (req, res) => {
 
 // Users
 api.get('/users', async (req, res) => {
-  const users = await db.select().from(schema.users);
+  let users = await db.select().from(schema.users);
+  const now = Date.now();
+  users = users.map(u => {
+    let online = false;
+    if (u.lastSeen) {
+      online = (now - new Date(u.lastSeen).getTime()) < 60000;
+    }
+    return { ...u, isOnline: online };
+  });
   res.json(users);
 });
 api.post('/users', async (req, res) => {
