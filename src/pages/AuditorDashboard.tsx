@@ -400,7 +400,7 @@ const BreakdownSection = ({ title, items }: { title: string, items: any }) => {
         {arr.map((item: any, idx: number) => (
           <div key={idx} className="flex justify-between text-xs">
             <span className="text-slate-400">
-              {item.description || 'Unnamed'}{item.date ? ` [${item.date}]` : ""} 
+              {item.description || 'Unnamed'}{item.date ? ` [${item.date}]` : ""} {item.cashierName ? `(Cashier: ${item.cashierName})` : ""} 
               {(item.amount || item.amount === 0) && <span className="text-slate-500 ml-1">({item.amount} {item.currencyCode})</span>}
             </span>
             <span className="text-slate-300 font-mono">$${(item.usdEquivalent||0).toFixed(2)}</span>

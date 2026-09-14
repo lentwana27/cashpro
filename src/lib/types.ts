@@ -71,6 +71,7 @@ export interface ReconLineItem {
   reconciliationId: string;
   description: string;
   invoiceNumber?: string;
+  cashierId?: string;
   cashierName?: string;
   category?: string;
   date?: string;

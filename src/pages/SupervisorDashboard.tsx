@@ -1467,14 +1467,14 @@ function CashUpForm({ currentUser,
         </div>
         <div className="p-4 sm:p-6 space-y-8">
           <ReconListField
-            title="Deposits Received"
+            title="Deposits Received" showCashierName={true} cashiers={cashiers}
             items={deposits}
             setItems={setDeposits}
             currencies={currencies}
             getUsd={getUsd}
           />
           <ReconListField
-            title="Manual Sales Not Captured Today (Adds to Expected)"
+            title="Manual Sales Not Captured Today (Adds to Expected)" showCashierName={true} cashiers={cashiers}
             items={manualSalesToday}
             setItems={setManualSalesToday}
             currencies={currencies}
@@ -1492,21 +1492,21 @@ function CashUpForm({ currentUser,
         </div>
         <div className="p-4 sm:p-6 space-y-8">
           <ReconListField
-            title="Debtors (Credit Sales)"
+            title="Debtors (Credit Sales)" showCashierName={true} cashiers={cashiers}
             items={debtors}
             setItems={setDebtors}
             currencies={currencies}
             getUsd={getUsd}
           />
           <ReconListField
-            title="Deposit Claims"
+            title="Deposit Claims" showCashierName={true} cashiers={cashiers}
             items={depositClaims}
             setItems={setDepositClaims}
             currencies={currencies}
             getUsd={getUsd}
           />
           <ReconListField
-            title="Returns / Refunds"
+            title="Returns / Refunds" showCashierName={true} cashiers={cashiers}
             items={returns}
             setItems={setReturns}
             currencies={currencies}
@@ -1527,7 +1527,7 @@ function CashUpForm({ currentUser,
             getUsd={getUsd}
           />
           <ReconListField
-            title="Manual Sales for Previous Days (Deducts from Expected)"
+            title="Manual Sales for Previous Days (Deducts from Expected)" showCashierName={true} cashiers={cashiers}
             items={manualSalesPrevious}
             setItems={setManualSalesPrevious}
             currencies={currencies}
@@ -2354,7 +2354,7 @@ const BreakdownSection = ({ title, items }: { title: string, items: any }) => {
         {arr.map((item: any, idx: number) => (
           <div key={idx} className="flex justify-between text-xs">
             <span className="text-slate-400">
-              {item.description || 'Unnamed'}{item.date ? ` [${item.date}]` : ""} 
+              {item.description || 'Unnamed'}{item.date ? ` [${item.date}]` : ""} {item.cashierName ? `(Cashier: ${item.cashierName})` : ""} 
               {(item.amount || item.amount === 0) && <span className="text-slate-500 ml-1">({item.amount} {item.currencyCode})</span>}
             </span>
             <span className="text-slate-300 font-mono">${(item.usdEquivalent||0).toFixed(2)}</span>
