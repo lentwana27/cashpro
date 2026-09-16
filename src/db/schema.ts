@@ -99,3 +99,11 @@ export const systemLogs = pgTable('system_logs', {
   details: text('details').notNull(),
   timestamp: text('timestamp').notNull(),
 });
+
+export const systemUpdates = pgTable('system_updates', {
+  id: text('id').primaryKey(),
+  date: text('date').notNull(),
+  title: text('title').notNull(),
+  features: jsonb('features').notNull(),
+  targetRoles: jsonb('target_roles').notNull(), // e.g. ["DIRECTOR", "ADMIN", "SUPERVISOR"]
+});

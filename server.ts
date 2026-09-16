@@ -356,7 +356,50 @@ api.use((req, res) => {
   res.status(404).json({ error: 'API Endpoint Not Found' });
 });
 
+
+// System Updates Routes
+api.get('/updates', async (req, res) => {
+  try {
+    const updates = await db.select().from(schema.systemUpdates);
+    res.json(updates);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch updates' });
+  }
+});
+
+api.post('/updates', async (req, res) => {
+  try {
+    const data = { ...req.body, id: uuidv4() };
+    await db.insert(schema.systemUpdates).values(data);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Add update error:', error);
+    res.status(500).json({ error: 'Failed to add update' });
+  }
+});
+
+api.put('/updates/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const data = req.body;
+    await db.update(schema.systemUpdates).set(data).where(eq(schema.systemUpdates.id, id));
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update' });
+  }
+});
+
+api.delete('/updates/:id', async (req, res) => {
+  try {
+    await db.delete(schema.systemUpdates).where(eq(schema.systemUpdates.id, req.params.id));
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete update' });
+  }
+});
+
 app.use('/api', api);
+
 
 app.use((err: any, req: any, res: any, next: any) => {
   console.error('Global Error Handler:', err);

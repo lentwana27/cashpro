@@ -1,7 +1,8 @@
+import { safeFormat } from '../lib/formatDate';
 import { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { User, Branch, SystemLog } from '../lib/types';
-import { Users, Building2, CheckCircle, ShieldCheck, MapPin, Edit3, X, Download, Database, Activity, Plus, Trash2 } from 'lucide-react';
+import { Users, Building2, Megaphone, CheckCircle, ShieldCheck, MapPin, Edit3, X, Download, Database, Activity, Plus, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
 import { format } from 'date-fns';
 
@@ -10,6 +11,12 @@ export function AdminDashboard() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [reconciliations, setReconciliations] = useState<any[]>([]);
   const [logs, setLogs] = useState<SystemLog[]>([]);
+
+  const [updates, setUpdates] = useState<any[]>([]);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [editingUpdate, setEditingUpdate] = useState<any>(null);
+  const [updateForm, setUpdateForm] = useState({ title: '', features: '', targetRoles: [] as string[] });
+
   
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
   const [editForm, setEditForm] = useState<Partial<Branch>>({});
@@ -33,7 +40,8 @@ export function AdminDashboard() {
 
   const loadData = async () => {
     try {
-      const [usrs, brs, recs, lgs] = await Promise.all([
+      const [usrs, brs, recs, lgs, upds] = await Promise.all([
+        api.get('/updates').catch(() => []),
         api.get('/users'),
         api.get('/branches'),
         api.get('/reconciliations'),
@@ -43,6 +51,7 @@ export function AdminDashboard() {
       setBranches(brs);
       setReconciliations(recs);
       setLogs(lgs.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+      setUpdates(upds.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()));
     } catch (e) {
       // Ignore network errors during polling
     }
@@ -50,6 +59,10 @@ export function AdminDashboard() {
 
   const unlockSales = async (id: string) => {
     await api.put(`/reconciliations/${id}`, { salesConfirmed: false });
+    loadData();
+  };
+  const handleUnlockRequest = async (id: string, newStatus: string) => {
+    await api.put(`/reconciliations/${id}`, { status: newStatus });
     loadData();
   };
 
@@ -82,7 +95,7 @@ export function AdminDashboard() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `system_backup_${format(new Date(), 'yyyyMMdd_HHmmss')}.json`;
+    link.download = `system_backup_${safeFormat(new Date(), 'yyyyMMdd_HHmmss')}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -98,7 +111,7 @@ export function AdminDashboard() {
     if (!editingUser) return;
     await api.put(`/users/${editingUser.id}`, {
       ...userEditForm,
-      branchId: userEditForm.branchId === '' ? undefined : userEditForm.branchId
+      branchId: userEditForm.branchId === '' ? null : userEditForm.branchId
     });
     setEditingUser(null);
     loadData();
@@ -136,8 +149,8 @@ export function AdminDashboard() {
   };
 
   const isSuspicious = (log: SystemLog) => {
-    const actionUpper = log.action.toUpperCase();
-    const detailsUpper = log.details.toUpperCase();
+    const actionUpper = (log.action || "").toUpperCase();
+    const detailsUpper = (log.details || "").toUpperCase();
     return actionUpper.includes('DELETE') || 
            actionUpper.includes('/APPROVE') || 
            (actionUpper.includes('PUT') && actionUpper.includes('/USERS')) ||
@@ -217,7 +230,7 @@ export function AdminDashboard() {
                   </div>
                   {u.lastSeen && !u.isOnline && (
                     <div className="text-[10px] text-slate-500">
-                      Last seen: {new Date(u.lastSeen).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                      Last seen: {u.lastSeen ? safeFormat(u.lastSeen, "HH:mm") : "Never"}
                     </div>
                   )}
                 </div>
@@ -266,8 +279,28 @@ export function AdminDashboard() {
       <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl shadow-xl flex flex-col p-4 sm:p-6">
         <div className="flex items-center gap-3 mb-4">
           <ShieldCheck className="text-rose-400 w-5 h-5" />
-          <h2 className="text-xl font-bold text-white">Locked Sales Records</h2>
+          <h2 className="text-xl font-bold text-white">Unlock Requests & Locked Records</h2>
         </div>
+        
+        {reconciliations.filter(r => r.status === 'UNLOCK_REQUESTED').length > 0 && (
+          <div className="mb-6 space-y-3">
+            <h3 className="text-sm font-bold text-amber-400 uppercase tracking-wider">Pending Missing Cash-Up Requests</h3>
+            {reconciliations.filter(r => r.status === 'UNLOCK_REQUESTED').map(r => (
+              <div key={r.id} className="bg-amber-500/10 p-4 rounded-xl border border-amber-500/20 flex flex-col gap-2">
+                <div className="flex justify-between items-start">
+                  <span className="font-bold text-white text-sm">{(branches || []).find(b => b.id === r.branchId)?.name || r.branchId}</span>
+                  <span className="text-xs text-slate-400">{r.date}</span>
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <button onClick={() => handleUnlockRequest(r.id, 'UNLOCK_APPROVED')} className="flex-1 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded transition-colors text-xs font-bold">Approve</button>
+                  <button onClick={() => handleUnlockRequest(r.id, 'UNLOCK_DECLINED')} className="flex-1 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded transition-colors text-xs font-bold">Decline</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        
+        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">Locked Sales</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {reconciliations.filter(r => r.salesConfirmed).map(r => (
             <div key={r.id} className="bg-[#112240] p-4 rounded-xl border border-[#1e345e] flex flex-col gap-2">
@@ -343,7 +376,7 @@ export function AdminDashboard() {
               {filteredLogs.map(log => (
                 <tr key={log.id} className="hover:bg-[#112240]/50 transition-colors">
                   <td className="px-4 py-3 font-mono text-xs whitespace-nowrap text-slate-400">
-                    {format(new Date(log.timestamp), 'yyyy-MM-dd HH:mm:ss')}
+                    {safeFormat(log.timestamp || new Date(), 'yyyy-MM-dd HH:mm:ss')}
                   </td>
                   <td className="px-4 py-3 font-medium text-white whitespace-nowrap">
                     {log.userName}
@@ -370,6 +403,161 @@ export function AdminDashboard() {
           )}
         </div>
       </div>
+
+      
+      {/* SYSTEM UPDATES MANAGEMENT */}
+      <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl shadow-xl flex flex-col p-4 sm:p-6">
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-3">
+            <Megaphone className="text-emerald-400 w-5 h-5" />
+            <h2 className="text-xl font-bold text-white">System Updates & Announcements</h2>
+          </div>
+          <button 
+            onClick={() => { setEditingUpdate(null); setUpdateForm({ title: '', features: '', targetRoles: ['ALL'] }); setShowUpdateModal(true); }}
+            className="flex items-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors"
+          >
+            <Plus className="w-4 h-4" /> New Update
+          </button>
+        </div>
+        <div className="space-y-4">
+          {updates.map(u => (
+            <div key={u.id} className="bg-[#112240] border border-[#1e345e] p-4 rounded-xl">
+              <div className="flex justify-between items-start mb-2">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-white">{u.title}</h3>
+                    <span className="text-xs bg-[#061121] px-2 py-0.5 rounded text-emerald-400 border border-emerald-500/20">{u.id}</span>
+                  </div>
+                  <div className="text-xs text-slate-400 mt-1">Date: {safeFormat(u.date || new Date(), 'MMM d, yyyy HH:mm')}</div>
+                  <div className="text-xs text-blue-400 mt-1">Audience: {(u.targetRoles || ['ALL']).join(', ')}</div>
+                </div>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => {
+                      setEditingUpdate(u);
+                      setUpdateForm({ title: u.title, features: (u.features || []).join('\n'), targetRoles: u.targetRoles || [] });
+                      setShowUpdateModal(true);
+                    }}
+                    className="p-1.5 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 rounded transition-colors"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={async () => {
+                      if (confirm('Delete this update?')) {
+                        await api.delete(`/updates/${u.id}`);
+                        loadData();
+                      }
+                    }}
+                    className="p-1.5 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 rounded transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              <ul className="list-disc list-inside text-sm text-slate-300 mt-2 space-y-1">
+                {(u.features || []).map((f: string, i: number) => <li key={i}>{f}</li>)}
+              </ul>
+            </div>
+          ))}
+          {updates.length === 0 && <div className="text-slate-500 text-sm">No updates published.</div>}
+        </div>
+      </div>
+
+      
+      {/* UPDATE MODAL */}
+      {showUpdateModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl shadow-2xl p-4 sm:p-6 w-full max-w-xl">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold text-white">{editingUpdate ? 'Edit Update' : 'New Update'}</h3>
+              <button onClick={() => setShowUpdateModal(false)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Update Title</label>
+                <input 
+                  type="text" 
+                  value={updateForm.title} 
+                  onChange={e => setUpdateForm({...updateForm, title: e.target.value})}
+                  className="w-full bg-[#061121] border border-[#1e345e] text-white p-2 rounded focus:outline-none focus:border-emerald-500" 
+                  placeholder="e.g. Version 1.3.0 - New Features"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Target Audience (Roles)</label>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {['ALL', 'SUPERVISOR', 'ACCOUNTANT', 'HEAD_ACCOUNTANT', 'DIRECTOR', 'AUDITOR'].map(role => (
+                    <label key={role} className="flex items-center gap-1.5 bg-[#112240] px-2 py-1 rounded text-xs text-slate-300 border border-[#1e345e] cursor-pointer hover:border-emerald-500/50">
+                      <input 
+                        type="checkbox"
+                        checked={updateForm.targetRoles.includes(role)}
+                        onChange={(e) => {
+                          let newRoles = [...updateForm.targetRoles];
+                          if (e.target.checked) {
+                            if (role === 'ALL') newRoles = ['ALL'];
+                            else {
+                              newRoles = newRoles.filter(r => r !== 'ALL');
+                              newRoles.push(role);
+                            }
+                          } else {
+                            newRoles = newRoles.filter(r => r !== role);
+                          }
+                          setUpdateForm({...updateForm, targetRoles: newRoles});
+                        }}
+                        className="rounded border-[#1e345e] bg-[#061121] text-emerald-500 focus:ring-0"
+                      />
+                      {role}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1">Update Messages / Features (One per line)</label>
+                <textarea 
+                  value={updateForm.features} 
+                  onChange={e => setUpdateForm({...updateForm, features: e.target.value})}
+                  className="w-full bg-[#061121] border border-[#1e345e] text-white p-2 rounded focus:outline-none focus:border-emerald-500 h-32" 
+                  placeholder="Added new export feature...\nFixed a bug with...\nUpdated dashboard layout..."
+                />
+              </div>
+              <div className="pt-4 flex justify-end gap-3">
+                <button onClick={() => setShowUpdateModal(false)} className="px-4 py-2 text-slate-400 hover:text-white text-sm">Cancel</button>
+                <button 
+                  onClick={async () => {
+                    const features = updateForm.features.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+                    if (!updateForm.title || features.length === 0) return alert('Title and at least one message line required.');
+                    
+                    const payload = {
+                      title: updateForm.title,
+                      features,
+                      targetRoles: updateForm.targetRoles.length > 0 ? updateForm.targetRoles : ['ALL']
+                    };
+                    
+                    if (editingUpdate) {
+                      await api.put(`/updates/${editingUpdate.id}`, payload);
+                    } else {
+                      await api.post('/updates', {
+                        id: `v${Date.now()}`,
+                        date: new Date().toISOString(),
+                        ...payload
+                      });
+                    }
+                    setShowUpdateModal(false);
+                    loadData();
+                  }} 
+                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-medium rounded-lg shadow-lg text-sm"
+                >
+                  Save Update
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* EDIT BRANCH MODAL */}
       {editingBranch && (

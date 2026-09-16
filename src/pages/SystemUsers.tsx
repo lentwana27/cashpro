@@ -57,7 +57,7 @@ export function SystemUsers() {
     try {
       if (editUser.id) {
         // Update
-        const payload = { ...editUser };
+        const payload = { ...editUser, branchId: editUser.branchId || null };
         if (userPassword) payload.passwordHash = userPassword;
         await api.put(`/users/${editUser.id}`, payload);
       } else {
@@ -67,7 +67,7 @@ export function SystemUsers() {
           email: editUser.email,
           passwordHash: userPassword || 'password123',
           role: editUser.role || 'CASHIER',
-          branchId: editUser.branchId || ''
+          branchId: editUser.branchId || null
         });
       }
       setShowUserModal(false);
@@ -143,10 +143,10 @@ export function SystemUsers() {
   };
 
   const filteredUsers = (users || []).filter((u) =>
-    u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    u.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    ((branches || []).find((b) => b.id === u.branchId)?.name || '').toLowerCase().includes(searchQuery.toLowerCase())
+    (u.name || "").toLowerCase().includes((searchQuery || "").toLowerCase()) ||
+    (u.email || "").toLowerCase().includes((searchQuery || "").toLowerCase()) ||
+    (u.role || "").toLowerCase().includes((searchQuery || "").toLowerCase()) ||
+    ((branches || []).find((b) => b.id === u.branchId)?.name || "").toLowerCase().includes((searchQuery || "").toLowerCase())
   );
 
   return (

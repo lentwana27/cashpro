@@ -1,3 +1,4 @@
+import { safeFormat } from '../lib/formatDate';
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useAuth } from "../components/AuthProvider";
 import { api } from "../lib/api";
@@ -23,7 +24,7 @@ import { format } from "date-fns";
 export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: string }) {
   const { user } = useAuth();
   const [rates, setRates] = useState<ExchangeRate[]>([]);
-  const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [date, setDate] = useState(safeFormat(new Date(), "yyyy-MM-dd"));
   const [submitted, setSubmitted] = useState<DailyReconciliation | null>(null);
   const [history, setHistory] = useState<DailyReconciliation[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -32,7 +33,7 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
   const [cashiers, setCashiers] = useState<any[]>([]);
 
   const earliestReconDate = useMemo(() => {
-    if (history.length === 0) return format(new Date(), "yyyy-MM-dd");
+    if (history.length === 0) return safeFormat(new Date(), "yyyy-MM-dd");
     const sortedDates = history.map(r => r.date).sort();
     return sortedDates[0];
   }, [history]);
@@ -49,7 +50,7 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
   const [qlAmount, setQlAmount] = useState("");
   const [qlCurr, setQlCurr] = useState("USD");
 
-  const todayStr = format(new Date(), "yyyy-MM-dd");
+  const todayStr = safeFormat(new Date(), "yyyy-MM-dd");
   const quickLogKey = `quick_logs_${(branchIdOverride || user?.branchId)}_${todayStr}`;
   const [quickLogs, setQuickLogs] = useState<any[]>(() => {
     try {
@@ -102,7 +103,7 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
 
     const link = document.createElement("a");
     link.setAttribute("href", encodeURI(csvContent));
-    link.setAttribute("download", `CashUps_${branch?.name || 'Branch'}_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    link.setAttribute("download", `CashUps_${branch?.name || 'Branch'}_${safeFormat(new Date(), 'yyyy-MM-dd')}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -201,7 +202,8 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
       !r.salesConfirmed &&
       r.date !== todayStr &&
       r.status !== "UNLOCK_REQUESTED" &&
-      r.status !== "UNLOCK_APPROVED",
+      r.status !== "UNLOCK_APPROVED" &&
+      r.status !== "UNLOCK_DECLINED",
   );
   const currentMissingSales = submitted && !submitted.salesConfirmed;
   const preventNewCashUp = !submitted && missingSalesRecs.length > 0;
@@ -286,7 +288,7 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
           )}
           <div className="flex items-center gap-2 px-4 py-2 bg-indigo-500/10 border border-indigo-500/30 rounded-lg">
             <div className="w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-xs">
-              {user?.name?.charAt(0).toUpperCase()}
+              {(user?.name || "").charAt(0).toUpperCase()}
             </div>
             <span className="text-indigo-300 font-medium text-sm">{user?.name}</span>
           </div>
@@ -325,13 +327,13 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
           </h2>
           <p className="text-slate-400 mb-8">
             You skipped the daily cash-up for{" "}
-            {format(new Date(date), "MMMM do, yyyy")}. You can now fill in the reconciliation for this date.
+            {safeFormat(date || new Date(), "MMMM do, yyyy")}. You must request an unlock to fill in the reconciliation for this date.
           </p>
           <button
-            onClick={() => setIsCashUpMode(true)}
-            className="px-8 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl shadow-lg transition-colors"
+            onClick={() => requestUnlock(date)}
+            className="px-8 py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-lg transition-colors"
           >
-            Start Missing Cash-Up
+            Request Missing Cash-Up
           </button>
         </div>
       ) : submitted && submitted.status === "UNLOCK_REQUESTED" ? (
@@ -343,9 +345,27 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
             Unlock Requested
           </h2>
           <p className="text-slate-400 mb-8">
-            Your request to unlock {format(new Date(date), "MMMM do, yyyy")} is
+            Your request to unlock {safeFormat(date || new Date(), "MMMM do, yyyy")} is
             pending approval from the accountant.
           </p>
+        </div>
+      ) : submitted && submitted.status === "UNLOCK_DECLINED" ? (
+        <div className="bg-[#0a192f] border border-rose-500/50 shadow-2xl rounded-2xl p-4 sm:p-6 md:p-8 text-center ring-1 ring-inset ring-rose-500/10">
+          <div className="mx-auto w-16 h-16 bg-rose-500/20 rounded-full flex items-center justify-center mb-4 border border-rose-500/50">
+            <AlertCircle className="w-8 h-8 text-rose-400" />
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-2">
+            Unlock Request Declined
+          </h2>
+          <p className="text-slate-400 mb-8">
+            Your request to unlock {safeFormat(date || new Date(), "MMMM do, yyyy")} was declined.
+          </p>
+          <button
+            onClick={() => requestUnlock(date)}
+            className="px-8 py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-lg transition-colors"
+          >
+            Request Again
+          </button>
         </div>
       ) : submitted && !isEditing && submitted.status !== "UNLOCK_APPROVED" ? (
         <div className="bg-[#0a192f] border border-[#1e345e] shadow-2xl rounded-2xl p-4 sm:p-6 md:p-8 text-center ring-1 ring-inset ring-emerald-500/10">
@@ -357,7 +377,7 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
           </h2>
           <p className="text-slate-400 mb-8">
             Your daily cash-up for{" "}
-            {format(new Date(submitted.date), "MMMM do, yyyy")} has been
+            {safeFormat(submitted.date || new Date(), "MMMM do, yyyy")} has been
             submitted and is currently{" "}
             <span className="font-semibold text-emerald-400">
               {submitted.status}
@@ -612,7 +632,7 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
                   className={clsx("transition-colors cursor-pointer", expandedId === r.id ? "bg-[#112240]" : "hover:bg-[#112240]/50")}
                 >
                   <td className="px-6 py-4 font-medium text-white">
-                    {format(new Date(r.date), "MMM d, yyyy")}
+                    {safeFormat(r.date || new Date(), "MMM d, yyyy")}
                   </td>
                   <td className="px-6 py-4 text-right text-slate-300">
                     $
@@ -1755,7 +1775,7 @@ function MissingSalesForm({ currentUser, recon, rates, branch, cashiers, onCance
       <div className="px-6 py-4 bg-blue-500/10 border-b border-blue-500/20">
         <h2 className="text-xl font-bold text-blue-400">Enter System Sales</h2>
         <p className="text-sm text-blue-300/70 mt-1">
-          For cash up Date: {format(new Date(recon.date), "MMMM do, yyyy")}
+          For cash up Date: {safeFormat(recon.date || new Date(), "MMMM do, yyyy")}
         </p>
       </div>
       <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6 bg-[#061121]">
@@ -1890,11 +1910,7 @@ function ReconField({
                 <input
                   type="date"
                   value={item.date || ""}
-                  onChange={(e) => {
-                    const newArr = [...items];
-                    newArr[idx].date = e.target.value;
-                    setItems(newArr);
-                  }}
+                  onChange={(e) => onChange(setter, item, "date", e.target.value)}
                   className="w-full bg-[#061121] text-xs text-blue-300 focus:outline-none mb-2 border border-[#1e345e] p-1.5 rounded"
                 />
               )}

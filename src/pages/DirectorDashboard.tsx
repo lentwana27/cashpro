@@ -1,3 +1,5 @@
+import { safeFormat } from '../lib/formatDate';
+import { ExportReportModal } from "../components/ExportReportModal";
 import { DollarSign, AlertCircle, TrendingDown, TrendingUp, Activity as ActivityIcon, ChevronDown, ChevronUp, MapPin, Download, FileText, FileSpreadsheet } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
@@ -17,10 +19,11 @@ export function DirectorDashboard() {
   const [branches, setBranches] = useState<Branch[]>([]);
   
   const [filterType, setFilterType] = useState('month'); // all, day, week, month, year
-  const [filterValue, setFilterValue] = useState(format(new Date(), 'yyyy-MM'));
+  const [filterValue, setFilterValue] = useState(safeFormat(new Date(), 'yyyy-MM'));
   
   const [selectedBranchFilter, setSelectedBranchFilter] = useState<string | null>(null);
   const [viewReconId, setViewReconId] = useState<string | null>(null);
+  const [showExportModal, setShowExportModal] = useState(false);
   const tableRef = React.useRef<HTMLDivElement>(null);
   
   useEffect(() => {
@@ -128,160 +131,6 @@ export function DirectorDashboard() {
     .filter(r => !selectedBranchFilter || r.branchId === selectedBranchFilter)
     .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  
-  const exportToCSV = () => {
-    const headers = [
-      'Branch', 'Date', 'Total Sales (USD)', 'Deposits Received (USD)', 
-      'Debtors (USD)', 'Returns (USD)', 'Expenses (USD)', 'Purchases (USD)', 
-      'Expected Cash (USD)', 'End Cash (USD)', 'Variance (USD)', 'Status'
-    ];
-    
-    const getSum = (val: any) => {
-      if (!val) return 0;
-      if (Array.isArray(val)) return val.reduce((a:any, b:any) => a + (b.usdEquivalent || 0), 0);
-      return val.usdEquivalent || 0;
-    };
-
-    const rows = sortedReconciliations.map((r: any) => [
-      (branches || []).find(b => b.id === r.branchId)?.name || r.branchId,
-      r.date,
-      parseFloat(getSum(r.totalSales).toFixed(2)),
-      parseFloat(getSum(r.depositsReceived).toFixed(2)),
-      parseFloat(getSum(r.debtors).toFixed(2)),
-      parseFloat(getSum(r.returnsRefunds).toFixed(2)),
-      parseFloat(getSum(r.expenses).toFixed(2)),
-      parseFloat(getSum(r.purchases).toFixed(2)),
-      parseFloat((r.expectedCashUsd || 0).toFixed(2)),
-      parseFloat((r.endOfDayCash?.usdEquivalent || 0).toFixed(2)),
-      parseFloat((r.varianceUsd || 0).toFixed(2)),
-      r.status
-    ]);
-
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
-
-    const link = document.createElement("a");
-    link.setAttribute("href", encodeURI(csvContent));
-    link.setAttribute("download", `CashUps_${format(new Date(), 'yyyy-MM-dd')}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const exportBranchDataToExcel = () => {
-    // Sheet 1: Branch Aggregates
-    const aggHeaders = ['Branch Code', 'Branch Name', 'Location', 'Total Sales (USD)', 'Total Variance (USD)', 'Total Expenses (USD)'];
-    const aggRows = branchAggregates.map((ba: any) => {
-      const b = (branches || []).find(br => br.id === ba.branchId);
-      return [
-        ba.branchId,
-        b?.name || 'Unknown',
-        b?.location || 'Unknown',
-        parseFloat((ba.sales || 0).toFixed(2)),
-        parseFloat((ba.variance || 0).toFixed(2)),
-        parseFloat((ba.expenses || 0).toFixed(2))
-      ];
-    });
-
-    // Sheet 2: Raw Daily Reconciliations
-    const rawHeaders = [
-      'Branch', 'Date', 'Total Sales (USD)', 'Deposits Received (USD)', 
-      'Debtors (USD)', 'Returns (USD)', 'Expenses (USD)', 'Purchases (USD)', 
-      'Expected Cash (USD)', 'End Cash (USD)', 'Variance (USD)', 'Status'
-    ];
-    
-    const getSum = (val: any) => {
-      if (!val) return 0;
-      if (Array.isArray(val)) return val.reduce((a:any, b:any) => a + (b.usdEquivalent || 0), 0);
-      return val.usdEquivalent || 0;
-    };
-
-    const rawRows = sortedReconciliations.map(r => [
-      (branches || []).find(b => b.id === r.branchId)?.name || r.branchId,
-      r.date,
-      parseFloat(getSum(r.totalSales).toFixed(2)),
-      parseFloat(getSum(r.depositsReceived).toFixed(2)),
-      parseFloat(getSum(r.debtors).toFixed(2)),
-      parseFloat(getSum(r.returnsRefunds).toFixed(2)),
-      parseFloat(getSum(r.expenses).toFixed(2)),
-      parseFloat(getSum(r.purchases).toFixed(2)),
-      parseFloat((r.expectedCashUsd || 0).toFixed(2)),
-      parseFloat((r.endOfDayCash?.usdEquivalent || 0).toFixed(2)),
-      parseFloat((r.varianceUsd || 0).toFixed(2)),
-      r.status
-    ]);
-
-    const workbook = XLSX.utils.book_new();
-    const aggSheet = XLSX.utils.aoa_to_sheet([aggHeaders, ...aggRows]);
-    const rawSheet = XLSX.utils.aoa_to_sheet([rawHeaders, ...rawRows]);
-    
-    XLSX.utils.book_append_sheet(workbook, aggSheet, "Branch Overview");
-    XLSX.utils.book_append_sheet(workbook, rawSheet, "Daily Raw Data");
-    XLSX.writeFile(workbook, `Director_Branch_Report_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
-  };
-
-  const exportBranchDataToPdf = () => {
-    const doc = new jsPDF();
-    
-    doc.setFontSize(18);
-    doc.text(`Director Branch Report - ${format(new Date(), 'yyyy-MM-dd')}`, 14, 20);
-    
-    // Branch Aggregates
-    doc.setFontSize(14);
-    doc.text('Branch Overview', 14, 30);
-    
-    const aggHeaders = [['Branch', 'Name', 'Location', 'Sales (USD)', 'Variance (USD)', 'Expenses (USD)']];
-    const aggRows = branchAggregates.map((ba: any) => {
-      const b = (branches || []).find(br => br.id === ba.branchId);
-      return [
-        ba.branchId,
-        b?.name || 'Unknown',
-        b?.location || 'Unknown',
-        `$${(ba.sales || 0).toFixed(2)}`,
-        `$${(ba.variance || 0).toFixed(2)}`,
-        `$${(ba.expenses || 0).toFixed(2)}`
-      ];
-    });
-
-    autoTable(doc, {
-      startY: 35,
-      head: aggHeaders,
-      body: aggRows,
-    });
-
-    let nextY = (doc as any).lastAutoTable.finalY + 10;
-    
-    doc.setFontSize(14);
-    doc.text('Daily Raw Data', 14, nextY);
-
-    const rawHeaders = [[
-      'Branch', 'Date', 'Sales ($)', 'Expected Cash ($)', 'Act Cash ($)', 'Var ($)', 'Status'
-    ]];
-
-    const getSum = (val: any) => {
-      if (!val) return 0;
-      if (Array.isArray(val)) return val.reduce((a:any, b:any) => a + (b.usdEquivalent || 0), 0);
-      return val.usdEquivalent || 0;
-    };
-
-    const rawRows = sortedReconciliations.map(r => [
-      (branches || []).find(b => b.id === r.branchId)?.name || r.branchId,
-      r.date,
-      `$${parseFloat(getSum(r.totalSales).toFixed(2))}`,
-      `$${parseFloat((r.expectedCashUsd || 0).toFixed(2))}`,
-      `$${parseFloat((r.endOfDayCash?.usdEquivalent || 0).toFixed(2))}`,
-      `$${parseFloat((r.varianceUsd || 0).toFixed(2))}`,
-      r.status
-    ]);
-
-    autoTable(doc, {
-      startY: nextY + 5,
-      head: rawHeaders,
-      body: rawRows,
-    });
-
-    doc.save(`Director_Report_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
-  };
 
   const handleBranchClick = (branchId: string) => {
     if (selectedBranchFilter === branchId) {
@@ -345,25 +194,11 @@ export function DirectorDashboard() {
           </div>
           <div className="flex items-center gap-2">
             <button 
-              onClick={exportToCSV}
-              className="flex items-center gap-2 px-3 py-2 bg-[#112240] hover:bg-[#1a2d53] border border-[#1e345e] rounded-lg text-sm font-medium text-white shadow-lg transition-colors"
+              onClick={() => setShowExportModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 rounded-lg text-sm font-medium text-white shadow-lg transition-colors"
             >
-              <Download className="w-4 h-4 text-emerald-400" />
-              CSV
-            </button>
-            <button 
-              onClick={exportBranchDataToExcel}
-              className="flex items-center gap-2 px-3 py-2 bg-emerald-500 hover:bg-emerald-600 rounded-lg text-sm font-medium text-white shadow-lg transition-colors"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-              Excel
-            </button>
-            <button 
-              onClick={exportBranchDataToPdf}
-              className="flex items-center gap-2 px-3 py-2 bg-rose-500 hover:bg-rose-600 rounded-lg text-sm font-medium text-white shadow-lg transition-colors"
-            >
-              <FileText className="w-4 h-4" />
-              PDF
+              <Download className="w-4 h-4" />
+              Advanced Export
             </button>
           </div>
         </div>
@@ -380,7 +215,7 @@ export function DirectorDashboard() {
             {missingReconciliations.slice(0, 8).map((m, idx) => (
               <div key={idx} className="bg-rose-500/5 p-3 rounded-lg border border-rose-500/10 flex justify-between items-center text-sm">
                 <span className="font-semibold text-rose-200 truncate pr-2">{m.branchName}</span>
-                <span className="text-rose-400/80 font-mono whitespace-nowrap">{format(new Date(m.date), 'MMM d, yyyy')}</span>
+                <span className="text-rose-400/80 font-mono whitespace-nowrap">{safeFormat(m.date || new Date(), 'MMM d, yyyy')}</span>
               </div>
             ))}
             {missingReconciliations.length > 8 && (
@@ -457,7 +292,7 @@ export function DirectorDashboard() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e345e" vertical={false} />
-                <XAxis dataKey="date" stroke="#64748b" tickFormatter={str => format(new Date(str), 'MMM d')} />
+                <XAxis dataKey="date" stroke="#64748b" tickFormatter={str => safeFormat(str || new Date(), 'MMM d')} />
                 <YAxis stroke="#64748b" />
                 <Tooltip contentStyle={{ backgroundColor: '#0a192f', borderColor: '#1e345e', color: '#f8fafc' }} />
                 <Area type="monotone" dataKey="sales" stroke="#34d399" strokeWidth={3} fillOpacity={1} fill="url(#colorSales)" />
@@ -472,7 +307,7 @@ export function DirectorDashboard() {
             <ResponsiveContainer minWidth={0} minHeight={0} width="100%" height={300}>
               <BarChart data={charData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e345e" vertical={false} />
-                <XAxis dataKey="date" stroke="#64748b" tickFormatter={str => format(new Date(str), 'MMM d')} />
+                <XAxis dataKey="date" stroke="#64748b" tickFormatter={str => safeFormat(str || new Date(), 'MMM d')} />
                 <YAxis stroke="#64748b" />
                 <Tooltip contentStyle={{ backgroundColor: '#0a192f', borderColor: '#1e345e', color: '#f8fafc' }} cursor={{fill: '#112240'}} />
                 <Bar dataKey="variance" name="Variance (USD)" radius={[4, 4, 0, 0]}>
@@ -552,7 +387,7 @@ export function DirectorDashboard() {
                         </div>
                       </td>
                       <td className="px-4 py-3 font-medium text-white">{(branches || []).find(b => b.id === r.branchId)?.name || r.branchId}</td>
-                      <td className="px-4 py-3 text-slate-300">{format(new Date(r.date), 'MMM d, yyyy')}</td>
+                      <td className="px-4 py-3 text-slate-300">{safeFormat(r.date || new Date(), 'MMM d, yyyy')}</td>
                       <td className="px-4 py-3 text-right font-mono">${(Array.isArray(r.totalSales) ? r.totalSales.reduce((a,b)=>a+(b.usdEquivalent||0),0) : (r.totalSales?.usdEquivalent || 0)).toFixed(2)}</td>
                       <td className={clsx("px-4 py-3 text-right font-mono font-bold", 
                         (r.varianceUsd || 0) > 0 ? "text-emerald-400" :
@@ -577,6 +412,12 @@ export function DirectorDashboard() {
           </div>
         </div>
       </div>
+      <ExportReportModal 
+        isOpen={showExportModal} 
+        onClose={() => setShowExportModal(false)} 
+        reconciliations={reconciliations} 
+        branches={branches} 
+      />
       {viewReconId && (
         <ReconModal 
           recon={(reconciliations || []).find(r => r.id === viewReconId)}

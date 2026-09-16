@@ -1,3 +1,4 @@
+import { safeFormat } from '../lib/formatDate';
 import { Link } from 'react-router-dom';
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
@@ -328,7 +329,7 @@ export function SystemBranches() {
                     const chartData = [...cashUps]
                       .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime())
                       .map(c => ({
-                        date: format(new Date(c.date), 'MMM dd'),
+                        date: safeFormat(c.date || new Date(), 'MMM dd'),
                         variance: c.varianceUsd || 0
                       }));
 
@@ -415,7 +416,7 @@ export function SystemBranches() {
                                     const ts = Array.isArray(c.totalSales) ? c.totalSales.reduce((a,b)=>a+(b.usdEquivalent||0),0) : (c.totalSales?.usdEquivalent || 0);
                                     return (
                                       <tr key={c.id} onClick={() => setViewReconId(c.id)} className="hover:bg-[#112240] transition-colors cursor-pointer">
-                                        <td className="px-4 py-3 font-mono text-slate-300">{format(new Date(c.date), 'MMM dd, yyyy')}</td>
+                                        <td className="px-4 py-3 font-mono text-slate-300">{safeFormat(c.date || new Date(), 'MMM dd, yyyy')}</td>
                                         <td className="px-4 py-3 font-medium text-white">${ts.toFixed(2)}</td>
                                         <td className="px-4 py-3">
                                           <span className={clsx("font-medium", c.varianceUsd < 0 ? "text-rose-400" : c.varianceUsd > 0 ? "text-emerald-400" : "text-white")}>
@@ -508,7 +509,7 @@ export function SystemBranches() {
                                 <tbody className="divide-y divide-[#1e345e]">
                                   {opVars.map((v, idx) => (
                                     <tr key={idx} className="hover:bg-[#112240]/50">
-                                      <td className="px-4 py-2 text-slate-300 font-mono">{format(new Date(v.date), 'MMM dd, yyyy')}</td>
+                                      <td className="px-4 py-2 text-slate-300 font-mono">{safeFormat(v.date || new Date(), 'MMM dd, yyyy')}</td>
                                       <td className="px-4 py-2 text-slate-300">{v.tillName}</td>
                                       <td className="px-4 py-2 text-slate-400 font-mono">${v.expected.toFixed(2)}</td>
                                       <td className="px-4 py-2 text-slate-400 font-mono">${v.actual.toFixed(2)}</td>

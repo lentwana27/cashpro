@@ -1,3 +1,4 @@
+import { safeFormat } from '../lib/formatDate';
 import React, { useState, useMemo } from 'react';
 import { DailyReconciliation, Branch } from '../lib/types';
 import { X, Search } from 'lucide-react';
@@ -72,7 +73,7 @@ export function BranchHistoryModal({
               {heatmapData.map(d => (
                 <div 
                   key={d.date} 
-                  title={`${format(new Date(d.date), 'MMM dd')}: ${d.variance === null ? 'No Data' : (d.variance > 0 ? '+' : '') + d.variance.toFixed(2)}`}
+                  title={`${safeFormat(d.date || new Date(), 'MMM dd')}: ${d.variance === null ? 'No Data' : (d.variance > 0 ? '+' : '') + d.variance.toFixed(2)}`}
                   className={clsx(
                     "w-6 h-6 rounded-sm cursor-pointer hover:ring-2 hover:ring-white transition-all",
                     d.variance === null ? "bg-[#1e345e]" : 
@@ -118,7 +119,7 @@ export function BranchHistoryModal({
                   filtered.map((r, i) => (
                     <tr key={i} className="hover:bg-[#112240]/50 transition-colors">
                       <td className="px-6 py-4 text-slate-300">
-                        {format(new Date(r.date), 'MMM dd, yyyy')}
+                        {safeFormat(r.date || new Date(), 'MMM dd, yyyy')}
                       </td>
                       <td className="px-6 py-4 text-right font-mono text-emerald-400">
                         {r.over > 0 ? '+' : ''}{r.over.toFixed(2)}

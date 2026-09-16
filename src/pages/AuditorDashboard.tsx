@@ -1,3 +1,4 @@
+import { safeFormat } from '../lib/formatDate';
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { DailyReconciliation, Branch } from '../lib/types';
@@ -7,12 +8,14 @@ import clsx from 'clsx';
 import { format } from 'date-fns';
 import { useAuth } from '../components/AuthProvider';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ReconModal } from '../components/ReconModal';
 
 export function AuditorDashboard() {
   const [reconciliations, setReconciliations] = useState<DailyReconciliation[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [viewingRecon, setViewingRecon] = useState<any>(null);
   const [rates, setRates] = useState<any[]>([]);
   const [editingSalesId, setEditingSalesId] = useState<string | null>(null);
   const { user } = useAuth();
@@ -48,40 +51,6 @@ export function AuditorDashboard() {
     .filter(r => filterStatus === 'ALL' ? true : r.status === filterStatus)
     .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  const exportToExcel = () => {
-    const headers = [
-      'Branch', 'Date', 'Total Sales (USD)', 'Deposits Received (USD)', 
-      'Debtors (USD)', 'Returns (USD)', 'Expenses (USD)', 'Purchases (USD)', 
-      'Expected Cash (USD)', 'End Cash (USD)', 'Variance (USD)', 'Status', 'Notes', 'Amendment History'
-    ];
-    
-    const rows = filteredRecon.map(r => [
-      (branches || []).find(b => b.id === r.branchId)?.name || r.branchId,
-      r.date,
-      parseFloat(getSum(r.totalSales).toFixed(2)),
-      parseFloat(getSum(r.depositsReceived).toFixed(2)),
-      parseFloat(getSum(r.debtors).toFixed(2)),
-      parseFloat(getSum(r.returnsRefunds).toFixed(2)),
-      parseFloat(getSum(r.expenses).toFixed(2)),
-      parseFloat(getSum(r.purchases).toFixed(2)),
-      parseFloat((r.expectedCashUsd || 0).toFixed(2)),
-      parseFloat((r.endOfDayCash?.usdEquivalent || 0).toFixed(2)),
-      parseFloat((r.varianceUsd || 0).toFixed(2)),
-      r.status,
-      `"${(r.notes || '').replace(/"/g, '""')}"`,
-      `"${(r.amendmentNotes?.join(' | ') || '').replace(/"/g, '""')}"`
-    ]);
-
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
-
-    const link = document.createElement("a");
-    link.setAttribute("href", encodeURI(csvContent));
-    link.setAttribute("download", `audit_report_${format(new Date(), 'yyyyMMdd')}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
 
   const markAsFlagged = async (id: string) => {
     try {
@@ -117,11 +86,11 @@ export function AuditorDashboard() {
         </div>
         <div className="flex flex-wrap gap-4">
           <button 
-            onClick={exportToExcel}
-            className="flex items-center gap-2 px-4 py-2 bg-[#112240] hover:bg-[#1a2d53] border border-[#1e345e] rounded-lg text-sm font-medium transition-colors text-white"
+            onClick={() => setShowExportModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 rounded-lg text-sm font-medium text-white shadow-lg transition-colors"
           >
-            <Download className="w-4 h-4 text-emerald-400" />
-            Export Full Log
+            <Download className="w-4 h-4" />
+            Advanced Export
           </button>
         </div>
       </div>
@@ -163,7 +132,7 @@ export function AuditorDashboard() {
           <table className="w-full text-left text-sm whitespace-nowrap">
             <thead className="bg-[#112240] text-slate-400 border-b border-[#1e345e]">
               <tr>
-                <th className="px-6 py-4 w-10"></th>
+                
                 <th className="px-6 py-4 font-medium">Branch</th>
                 <th className="px-6 py-4 font-medium">Date</th>
                 <th className="px-6 py-4 text-right font-medium">Actual Cash</th>
@@ -176,15 +145,11 @@ export function AuditorDashboard() {
             <tbody className="divide-y divide-[#1e345e]">
               {filteredRecon.map(r => (
                 <React.Fragment key={r.id}>
-                  <tr className={clsx("hover:bg-[#112240]/50 transition-colors", expandedId === r.id && "bg-[#112240]/30")}>
-                    <td className="px-6 py-4">
-                      <button onClick={() => setExpandedId(expandedId === r.id ? null : r.id)} className="text-slate-400 hover:text-white p-1 rounded hover:bg-[#1e345e]">
-                        {expandedId === r.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                      </button>
-                    </td>
+                  <tr className={clsx("hover:bg-[#112240]/50 transition-colors cursor-pointer")} onClick={() => setViewingRecon(r)}>
+                    
                     <td className="px-6 py-4 font-medium text-white">{(branches || []).find(b => b.id === r.branchId)?.name || r.branchId}</td>
                     <td className="px-6 py-4 text-slate-300">
-                      <div>{format(new Date(r.date), 'MMM d, yyyy')}</div>
+                      <div>{safeFormat(r.date || new Date(), 'MMM d, yyyy')}</div>
                       {r.salesInputtedByName && <div className="text-[10px] text-emerald-400 font-bold mt-1">Sales by: {r.salesInputtedByName}</div>}
                     </td>
                     <td className="px-6 py-4 text-right font-mono">${(r.endOfDayCash?.usdEquivalent || 0).toFixed(2)}</td>
@@ -214,14 +179,31 @@ export function AuditorDashboard() {
                         </button>
                       )}
                       <button 
-                          onClick={() => setEditingSalesId(r.id)}
-                          className="px-3 py-1.5 ml-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 rounded transition-colors text-xs font-bold"
+                          disabled={r.salesConfirmed}
+                           onClick={(e) => { e.stopPropagation(); setEditingSalesId(r.id) }}
+                          className={`px-3 py-1.5 ml-2 rounded transition-colors text-xs font-bold ${r.salesConfirmed ? "bg-slate-800 text-slate-500 cursor-not-allowed" : "bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400"}`}
                         >
-                          {r.salesConfirmed ? 'Edit Sales' : 'Input Sales'}
+                          {r.salesConfirmed ? 'Sales Locked' : 'Input Sales'}
                         </button>
+                      {r.status === 'UNLOCK_REQUESTED' && (
+                        <div className="flex gap-2 ml-2">
+                          <button 
+                             onClick={(e) => { e.stopPropagation(); updateStatus(r.id, 'UNLOCK_APPROVED')  }}
+                            className="px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-400 rounded transition-colors text-xs font-bold"
+                          >
+                            Approve
+                          </button>
+                          <button 
+                             onClick={(e) => { e.stopPropagation(); updateStatus(r.id, 'UNLOCK_DECLINED')  }}
+                            className="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-400 rounded transition-colors text-xs font-bold"
+                          >
+                            Decline
+                          </button>
+                        </div>
+                      )}
                       {r.status === 'AMENDMENT_REQUESTED' && !r.auditorAmendmentApproval && (
                         <button 
-                          onClick={() => updateStatus(r.id, 'AMENDMENT_APPROVED', r)}
+                           onClick={(e) => { e.stopPropagation(); updateStatus(r.id, 'AMENDMENT_APPROVED', r)  }}
                           className="px-3 py-1.5 ml-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-400 rounded transition-colors text-xs font-bold"
                         >
                           Approve Amendment
@@ -229,115 +211,7 @@ export function AuditorDashboard() {
                       )}
                     </td>
                   </tr>
-                  {expandedId === r.id && (
-                    <tr className="bg-[#061121]/50 shadow-inner">
-                      <td colSpan={8} className="p-0 border-b border-[#1e345e]">
-                                  {(() => {
-                                  const getSum = (arr: any) => {
-                                    if (!arr) return 0;
-                                    if (Array.isArray(arr)) return arr.reduce((a,b)=>a+(b.usdEquivalent||0),0);
-                                    return arr.usdEquivalent||0;
-                                  };
-                                  const tSales = getSum(r.totalSales);
-                                  const tDeps = getSum(r.depositsReceived);
-                                  const totalIncome = tSales + tDeps + getSum(r.manualSalesToday);
-                                  
-                                  const tDebtors = getSum(r.debtors);
-                                  const tDepClaims = getSum(r.depositClaims);
-                                  const tRet = getSum(r.returnsRefunds);
-                                  const tExp = getSum(r.expenses);
-                                  const tPur = getSum(r.purchases);
-                                  const totalDeductions = tDebtors + tDepClaims + tRet + tExp + tPur + getSum(r.manualSalesPrevious);
-                                  
-                                  const expected = totalIncome - totalDeductions;
-                                  const actualCash = getSum(r.tillCashBreakdown);
-                                  const variance = actualCash - expected;
-                                  
-                                  return (
-                                    <>
-                                      <div className="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
-                                        <div>
-                                          <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-4 border-b-2 border-double border-[#1e345e] pb-2">Income breakdown</h4>
-                                          <div className="space-y-4">
-                                            <BreakdownSection title="Total Sales" items={r.totalSales} />
-                                            <BreakdownSection title="Deposits Received" items={r.depositsReceived} />
-                                            <BreakdownSection title="Manual Sales Not Captured Today" items={r.manualSalesToday} />
-                                          </div>
-                                          <div className="mt-4 pt-3 border-t-2 border-double border-emerald-500/30 flex justify-between font-bold text-sm text-emerald-400">
-                                            <span>Total Income</span>
-                                            <span className="font-mono">${totalIncome.toFixed(2)}</span>
-                                          </div>
-                                        </div>
-                                        
-                                        <div>
-                                          <h4 className="text-xs font-bold text-rose-400 uppercase tracking-wider mb-4 border-b-2 border-double border-[#1e345e] pb-2">Deductions breakdown</h4>
-                                          <div className="space-y-4">
-                                            <BreakdownSection title="Debtors (Credit Sales)" items={r.debtors} />
-                                            <BreakdownSection title="Deposit Claims" items={r.depositClaims} />
-                                            <BreakdownSection title="Returns / Refunds" items={r.returnsRefunds} />
-                                            <BreakdownSection title="Operational Expenses" items={r.expenses} />
-                                            <BreakdownSection title="Purchases" items={r.purchases} />
-                                            <BreakdownSection title="Manual Sales for Previous Days" items={r.manualSalesPrevious} />
-                                          </div>
-                                          <div className="mt-4 pt-3 border-t-2 border-double border-rose-500/30 flex justify-between font-bold text-sm text-rose-400">
-                                            <span>Total Deductions</span>
-                                            <span className="font-mono">${totalDeductions.toFixed(2)}</span>
-                                          </div>
-                                        </div>
-                                      </div>
-                                      
-                                      <div className="bg-[#0a192f] p-4 sm:p-6 border-t border-[#1e345e] grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
-                                        <div>
-                                          <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">Expected Cash</div>
-                                          <div className="text-2xl font-mono text-white">${expected.toFixed(2)}</div>
-                                        </div>
-                                        <div>
-                                          <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">Physical Cash Counted</div>
-                                          <div className="text-2xl font-mono text-white">${actualCash.toFixed(2)}</div>
-                                        </div>
-                                        <div>
-                                          <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">Variance</div>
-                                          <div className={"text-2xl font-mono font-bold " + (variance > 0 ? "text-emerald-400" : variance < 0 ? "text-rose-400" : "text-slate-300")}>
-                                            {variance > 0 ? '+' : ''}{variance.toFixed(2)}
-                                          </div>
-                                        </div>
-                                      </div>
-                                      
-                                      {(r.notes || r.signature || (r.amendmentNotes && r.amendmentNotes.length > 0)) && (
-                                        <div className="px-6 pb-6 mt-2 border-t border-[#1e345e] pt-6">
-                                          <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-[#1e345e] pb-2">Notes & Verification</h4>
-                                          {r.amendmentNotes && r.amendmentNotes.length > 0 && (
-                                            <div className="mb-4 space-y-2">
-                                              <p className="text-xs text-slate-500 mb-1">Amendment History</p>
-                                              {(r.amendmentNotes || []).map((note: string, i: number) => (
-                                                <div key={i} className="text-sm text-yellow-500/90 bg-yellow-500/10 p-3 rounded-lg border border-yellow-500/20 leading-relaxed font-medium">
-                                                  {note}
-                                                </div>
-                                              ))}
-                                            </div>
-                                          )}
-                                          {r.notes && (
-                                            <div className="mb-4">
-                                              <p className="text-xs text-slate-500 mb-1">Additional Notes</p>
-                                              <p className="text-sm text-slate-300 bg-[#061121] p-3 rounded-lg border border-[#1e345e]">{r.notes}</p>
-                                            </div>
-                                          )}
-                                          {r.signature && (
-                                            <div>
-                                              <p className="text-xs text-slate-500 mb-1">Digitally Signed By</p>
-                                              <p className="text-lg text-emerald-400 font-serif italic">{r.signature}</p>
-                                            </div>
-                                          )}
-                                        </div>
-                                      )}
-                                    </>
-
-                                  );
-                                })()}
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
+                  </React.Fragment>
               ))}
               {filteredRecon.length === 0 && (
                 <tr>
@@ -353,7 +227,8 @@ export function AuditorDashboard() {
         
       </div>
       <CashierShortageChart reconciliations={filteredRecon} branches={branches} />
-      {editingSalesId && (
+      {viewingRecon && <ReconModal recon={viewingRecon} onClose={() => setViewingRecon(null)} />}
+        {editingSalesId && (
         <InputSalesModal 
           currentUser={user}
           reconciliation={(reconciliations || []).find(r => r.id === editingSalesId)} 

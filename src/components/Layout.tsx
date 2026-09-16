@@ -1,14 +1,16 @@
-import { ReactNode, useState, useEffect } from 'react';
+import React, { ReactNode, useState, useEffect } from 'react';
 import { useAuth } from './AuthProvider';
-import { LogOut, LayoutDashboard, Building2, Users, FileText, Activity, UserSquare, Sun, Moon } from 'lucide-react';
+import { LogOut, LayoutDashboard, Building2, Users, FileText, Activity, UserSquare, Sun, Moon, BellRing } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import clsx from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChatWidget } from './ChatWidget';
+import { UpdatesModal } from './UpdatesModal';
 import { api } from '../lib/api';
 
 export function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
+  const [showUpdates, setShowUpdates] = React.useState(false);
   const location = useLocation();
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -101,6 +103,19 @@ export function Layout({ children }: { children: ReactNode }) {
                <div className="text-xs text-emerald-400 capitalize">{user.role.toLowerCase()}</div>
              </div>
              
+             <button
+               onClick={() => setShowUpdates(true)}
+               className="w-full flex items-center justify-between px-4 py-3 rounded-lg text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 transition-colors mb-2 border border-amber-500/20"
+             >
+               <div className="flex items-center gap-3">
+                 <BellRing className="w-5 h-5" />
+                 <span className="font-medium">What's New</span>
+               </div>
+               <span className="flex h-2 w-2 relative">
+                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                 <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+               </span>
+             </button>
              <button
                onClick={() => setIsLightMode(!isLightMode)}
                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-[#112240] transition-colors mb-2"
@@ -232,6 +247,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </div>
       </main>
 
+      <UpdatesModal isOpen={showUpdates} onClose={() => setShowUpdates(false)} />
       {/* Global Chat / Notification Widget */}
       <ChatWidget />
     </div>

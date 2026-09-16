@@ -1,3 +1,5 @@
+import { safeFormat } from '../lib/formatDate';
+import { ExportReportModal } from "../components/ExportReportModal";
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { DailyReconciliation, ExchangeRate } from '../lib/types';
@@ -5,6 +7,7 @@ import { format } from 'date-fns';
 import { CheckCircle, AlertOctagon, RefreshCw, Settings, Search, ArrowUpDown, ChevronDown, ChevronUp, Download } from 'lucide-react';
 import clsx from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ReconModal } from '../components/ReconModal';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../components/AuthProvider';
 
@@ -20,9 +23,10 @@ export function AccountantDashboard() {
   const [sortField, setSortField] = useState<'branchId' | 'date'>('date');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [viewingRecon, setViewingRecon] = useState<any>(null);
 
   const [editingSalesId, setEditingSalesId] = useState<string | null>(null);
+  const [showExportModal, setShowExportModal] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -37,7 +41,7 @@ export function AccountantDashboard() {
         api.get('/rates'),
         api.get('/branches')
       ]);
-      setReconciliations(recs);
+      setReconciliations(recs.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()));
       setRates(rts);
       setBranches(brs);
     } catch (e) {
@@ -89,85 +93,6 @@ export function AccountantDashboard() {
           : b.branchId.localeCompare(a.branchId);
       }
     });
-
-  
-  const exportToCSV = () => {
-    const headers = [
-      'Branch', 'Date', 'Total Sales (USD)', 'Deposits Received (USD)', 
-      'Debtors (USD)', 'Returns (USD)', 'Expenses (USD)', 'Purchases (USD)', 
-      'Expected Cash (USD)', 'End Cash (USD)', 'Variance (USD)', 'Status', 'Notes', 'Amendment History'
-    ];
-    
-    const getSum = (val: any) => {
-      if (!val) return 0;
-      if (Array.isArray(val)) return val.reduce((a:any, b:any) => a + (b.usdEquivalent || 0), 0);
-      return val.usdEquivalent || 0;
-    };
-
-    const rows = filteredRecon.map(r => [
-      (branches || []).find(b => b.id === r.branchId)?.name || r.branchId,
-      r.date,
-      parseFloat(getSum(r.totalSales).toFixed(2)),
-      parseFloat(getSum(r.depositsReceived).toFixed(2)),
-      parseFloat(getSum(r.debtors).toFixed(2)),
-      parseFloat(getSum(r.returnsRefunds).toFixed(2)),
-      parseFloat(getSum(r.expenses).toFixed(2)),
-      parseFloat(getSum(r.purchases).toFixed(2)),
-      parseFloat((r.expectedCashUsd || 0).toFixed(2)),
-      parseFloat((r.endOfDayCash?.usdEquivalent || 0).toFixed(2)),
-      parseFloat((r.varianceUsd || 0).toFixed(2)),
-      r.status,
-      `"${(r.notes || '').replace(/"/g, '""')}"`,
-      `"${(r.amendmentNotes?.join(' | ') || '').replace(/"/g, '""')}"`
-    ]);
-
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
-
-    const link = document.createElement("a");
-    link.setAttribute("href", encodeURI(csvContent));
-    link.setAttribute("download", `Reconciliations_${format(new Date(), 'yyyy-MM-dd')}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const exportToExcel = () => {
-    const headers = [
-      'Branch', 'Date', 'Total Sales (USD)', 'Deposits Received (USD)', 
-      'Debtors (USD)', 'Returns (USD)', 'Expenses (USD)', 'Purchases (USD)', 
-      'Expected Cash (USD)', 'End Cash (USD)', 'Variance (USD)', 'Status', 'Notes', 'Amendment History'
-    ];
-    
-    const getSum = (val: any) => {
-      if (!val) return 0;
-      if (Array.isArray(val)) return val.reduce((a:any, b:any) => a + (b.usdEquivalent || 0), 0);
-      return val.usdEquivalent || 0;
-    };
-
-    const rows = filteredRecon.map(r => [
-      (branches || []).find(b => b.id === r.branchId)?.name || r.branchId,
-      r.date,
-      parseFloat(getSum(r.totalSales).toFixed(2)),
-      parseFloat(getSum(r.depositsReceived).toFixed(2)),
-      parseFloat(getSum(r.debtors).toFixed(2)),
-      parseFloat(getSum(r.returnsRefunds).toFixed(2)),
-      parseFloat(getSum(r.expenses).toFixed(2)),
-      parseFloat(getSum(r.purchases).toFixed(2)),
-      parseFloat((r.expectedCashUsd || 0).toFixed(2)),
-      parseFloat((r.endOfDayCash?.usdEquivalent || 0).toFixed(2)),
-      parseFloat((r.varianceUsd || 0).toFixed(2)),
-      r.status,
-      r.notes || '',
-      r.amendmentNotes?.join(' | ') || ''
-    ]);
-    
-    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Reconciliations");
-    XLSX.writeFile(workbook, `Reconciliations_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
-  };
-
   const missingReconciliations = React.useMemo(() => {
     const missing: { branchName: string; date: string }[] = [];
     const today = new Date();
@@ -196,18 +121,11 @@ export function AccountantDashboard() {
         <h1 className="text-3xl font-bold text-white tracking-tight">Reconciliation Review</h1>
         <div className="flex flex-wrap gap-4">
           <button 
-            onClick={exportToCSV}
-            className="flex items-center gap-2 px-4 py-2 bg-[#112240] hover:bg-[#1a2d53] border border-[#1e345e] rounded-lg text-sm font-medium transition-colors"
+            onClick={() => setShowExportModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 rounded-lg text-sm font-medium text-white shadow-lg transition-colors"
           >
-            <Download className="w-4 h-4 text-emerald-400" />
-            Download CSV
-          </button>
-          <button 
-            onClick={exportToExcel}
-            className="flex items-center gap-2 px-4 py-2 bg-[#112240] hover:bg-[#1a2d53] border border-[#1e345e] rounded-lg text-sm font-medium transition-colors"
-          >
-            <Download className="w-4 h-4 text-emerald-400" />
-            Download Excel
+            <Download className="w-4 h-4" />
+            Advanced Export
           </button>
           <button 
             onClick={() => setShowRates(true)}
@@ -230,7 +148,7 @@ export function AccountantDashboard() {
             {missingReconciliations.slice(0, 9).map((m, idx) => (
               <div key={idx} className="bg-rose-500/5 p-3 rounded-lg border border-rose-500/10 flex justify-between items-center text-sm">
                 <span className="font-semibold text-rose-200">{m.branchName}</span>
-                <span className="text-rose-400/80 font-mono">{format(new Date(m.date), 'MMM d, yyyy')}</span>
+                <span className="text-rose-400/80 font-mono">{safeFormat(m.date || new Date(), 'MMM d, yyyy')}</span>
               </div>
             ))}
             {missingReconciliations.length > 9 && (
@@ -274,9 +192,9 @@ export function AccountantDashboard() {
             <option value="FLAGGED">Flagged</option>
           </select>
           
-          {(searchBranch || filterDate !== format(new Date(), 'yyyy-MM-dd') || filterStatus !== 'ALL') && (
+          {(searchBranch || filterDate !== safeFormat(new Date(), 'yyyy-MM-dd') || filterStatus !== 'ALL') && (
             <button 
-              onClick={() => { setSearchBranch(''); setFilterDate(format(new Date(), 'yyyy-MM-dd')); setFilterStatus('ALL'); }}
+              onClick={() => { setSearchBranch(''); setFilterDate(safeFormat(new Date(), 'yyyy-MM-dd')); setFilterStatus('ALL'); }}
               className="px-3 py-2 text-sm text-slate-400 hover:text-white transition-colors"
             >
               Clear Filters
@@ -288,7 +206,7 @@ export function AccountantDashboard() {
           <table className="w-full text-left text-sm whitespace-nowrap">
             <thead className="bg-[#061121] text-slate-400">
               <tr>
-                <th className="px-6 py-4 w-10"></th>
+                
                 <th className="px-6 py-4 font-medium transition-colors hover:text-white cursor-pointer select-none" onClick={() => handleSort('branchId')}>
                   <div className="flex items-center gap-2">Branch <ArrowUpDown className="w-3 h-3" /></div>
                 </th>
@@ -305,18 +223,11 @@ export function AccountantDashboard() {
             <tbody className="divide-y divide-[#1e345e]">
               {filteredRecon.map(r => (
                 <React.Fragment key={r.id}>
-                  <tr className={clsx("transition-colors", expandedId === r.id ? "bg-[#112240]" : "hover:bg-[#112240]/50")}>
-                    <td className="px-6 py-4">
-                      <button 
-                        onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
-                        className="p-1 rounded hover:bg-[#1e345e] transition-colors"
-                      >
-                        {expandedId === r.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                      </button>
-                    </td>
+                  <tr className={clsx("transition-colors cursor-pointer hover:bg-[#112240]/50")} onClick={() => setViewingRecon(r)}>
+                    
                     <td className="px-6 py-4 font-medium text-white">{(branches || []).find(b => b.id === r.branchId)?.name || r.branchId}</td>
                     <td className="px-6 py-4 text-slate-300">
-                      <div>{format(new Date(r.date), 'MMM d, yyyy')}</div>
+                      <div>{safeFormat(r.date || new Date(), 'MMM d, yyyy')}</div>
                       {r.salesInputtedByName && <div className="text-[10px] text-emerald-400 font-bold mt-1">Sales by: {r.salesInputtedByName}</div>}
                     </td>
                     <td className="px-6 py-4 text-right font-mono">${(Array.isArray(r.totalSales) ? r.totalSales.reduce((a:number,b:any)=>a+(b.usdEquivalent||0),0) : (r.totalSales?.usdEquivalent || 0)).toFixed(2)}</td>
@@ -337,26 +248,31 @@ export function AccountantDashboard() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right space-x-2 flex justify-end">
-                      <button onClick={() => setEditingSalesId(r.id)} className="px-3 py-1 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 rounded text-xs font-bold transition-colors">
-                          {r.salesConfirmed ? 'Edit Sales' : 'Input Sales'}
+                      <button disabled={r.salesConfirmed}  onClick={(e) => { e.stopPropagation(); setEditingSalesId(r.id) }} className={`px-3 py-1 rounded text-xs font-bold transition-colors ${r.salesConfirmed ? "bg-slate-800 text-slate-500 cursor-not-allowed" : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20"}`}>
+                          {r.salesConfirmed ? 'Sales Locked' : 'Input Sales'}
                         </button>
                       {r.status === 'PENDING' && (
                         <>
-                          <button onClick={() => updateStatus(r.id, 'APPROVED')} className="p-1.5 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded-md transition-colors" title="Approve">
+                          <button  onClick={(e) => { e.stopPropagation(); updateStatus(r.id, 'APPROVED')  }} className="p-1.5 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded-md transition-colors" title="Approve">
                             <CheckCircle className="w-4 h-4" />
                           </button>
-                          <button onClick={() => updateStatus(r.id, 'FLAGGED')} className="p-1.5 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 rounded-md transition-colors" title="Flag Setup">
+                          <button  onClick={(e) => { e.stopPropagation(); updateStatus(r.id, 'FLAGGED')  }} className="p-1.5 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 rounded-md transition-colors" title="Flag Setup">
                             <AlertOctagon className="w-4 h-4" />
                           </button>
                         </>
                       )}
                       {r.status === 'UNLOCK_REQUESTED' && (
-                        <button onClick={() => updateStatus(r.id, 'UNLOCK_APPROVED')} className="px-3 py-1 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/20 rounded text-xs font-bold transition-colors">
-                          Approve Unlock
-                        </button>
+                        <div className="flex gap-2">
+                          <button  onClick={(e) => { e.stopPropagation(); updateStatus(r.id, 'UNLOCK_APPROVED')  }} className="px-3 py-1 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/20 rounded text-xs font-bold transition-colors">
+                            Approve
+                          </button>
+                          <button  onClick={(e) => { e.stopPropagation(); updateStatus(r.id, 'UNLOCK_DECLINED')  }} className="px-3 py-1 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20 rounded text-xs font-bold transition-colors">
+                            Decline
+                          </button>
+                        </div>
                       )}
                       {r.status === 'AMENDMENT_REQUESTED' && !r.accountantAmendmentApproval && (
-                        <button onClick={() => updateStatus(r.id, 'AMENDMENT_APPROVED', r)} className="px-3 py-1 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 rounded text-xs font-bold transition-colors">
+                        <button  onClick={(e) => { e.stopPropagation(); updateStatus(r.id, 'AMENDMENT_APPROVED', r)  }} className="px-3 py-1 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 rounded text-xs font-bold transition-colors">
                           Approve Amendment
                         </button>
                       )}
@@ -364,133 +280,7 @@ export function AccountantDashboard() {
                   </tr>
                   
                   {/* Expanded View */}
-                  <AnimatePresence>
-                    {expandedId === r.id && (
-                      <motion.tr 
-                        initial={{ opacity: 0, height: 0 }} 
-                        animate={{ opacity: 1, height: 'auto' }} 
-                        exit={{ opacity: 0, height: 0 }}
-                        className="bg-[#061121]/50 shadow-inner"
-                      >
-                        <td colSpan={8} className="p-0 border-b border-[#1e345e]">
-                          
-                                {(() => {
-                                  const getSum = (arr) => {
-                                    if (!arr) return 0;
-                                    if (Array.isArray(arr)) return arr.reduce((a,b)=>a+(b.usdEquivalent||0),0);
-                                    return arr.usdEquivalent||0;
-                                  };
-                                  const tSales = getSum(r.totalSales);
-                                  const tDeps = getSum(r.depositsReceived);
-                                  const totalIncome = tSales + tDeps + getSum(r.manualSalesToday);
-                                  
-                                  const tDebtors = getSum(r.debtors);
-                                  const tDepClaims = getSum(r.depositClaims);
-                                  const tRet = getSum(r.returnsRefunds);
-                                  const tExp = getSum(r.expenses);
-                                  const tPur = getSum(r.purchases);
-                                  const totalDeductions = tDebtors + tDepClaims + tRet + tExp + tPur + getSum(r.manualSalesPrevious);
-                                  
-                                  const expected = totalIncome - totalDeductions;
-                                  const actualCash = getSum(r.tillCashBreakdown);
-                                  const variance = actualCash - expected;
-                                  
-                                  return (
-                                    <>
-                                      <div className="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
-                                        <div>
-                                          <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-4 border-b-2 border-double border-[#1e345e] pb-2">Income breakdown</h4>
-                                          <div className="space-y-4">
-                                            <BreakdownSection title="Total Sales" items={r.totalSales} />
-                                            <BreakdownSection title="Deposits Received" items={r.depositsReceived} />
-                                            <BreakdownSection title="Manual Sales Not Captured Today" items={r.manualSalesToday} />
-                                          </div>
-                                          <div className="mt-4 pt-3 border-t-2 border-double border-emerald-500/30 flex justify-between font-bold text-sm text-emerald-400">
-                                            <span>Total Income</span>
-                                            <span className="font-mono">${totalIncome.toFixed(2)}</span>
-                                          </div>
-                                        </div>
-                                        <div>
-                                          <h4 className="text-xs font-bold text-rose-400 uppercase tracking-wider mb-4 border-b-2 border-double border-[#1e345e] pb-2">Deductions breakdown</h4>
-                                          <div className="space-y-4">
-                                            <BreakdownSection title="Debtors" items={r.debtors} />
-                                            <BreakdownSection title="Deposit Claims" items={r.depositClaims} />
-                                            <BreakdownSection title="Returns / Refunds" items={r.returnsRefunds} />
-                                            <BreakdownSection title="Expenses" items={r.expenses} />
-                                            <BreakdownSection title="Purchases" items={r.purchases} />
-                                            <BreakdownSection title="Manual Sales for Previous Days" items={r.manualSalesPrevious} />
-                                          </div>
-                                          <div className="mt-4 pt-3 border-t-2 border-double border-rose-500/30 flex justify-between font-bold text-sm text-rose-400">
-                                            <span>Total Deductions</span>
-                                            <span className="font-mono">${totalDeductions.toFixed(2)}</span>
-                                          </div>
-                                        </div>
-                                      </div>
-                                      
-                                      <div className="px-6 pb-6">
-                                        <div className="bg-[#112240] border border-[#1e345e] rounded-xl p-4 grid grid-cols-1 sm:grid-cols-3 gap-4 text-center divide-y sm:divide-y-0 sm:divide-x divide-[#1e345e]">
-                                          <div className="p-2">
-                                            <div className="text-xs text-slate-400 uppercase tracking-wider mb-1">Expected Cash</div>
-                                            <div className="text-xl font-mono font-bold text-white">${expected.toFixed(2)}</div>
-                                            <div className="text-[10px] text-slate-500 mt-1">(Income - Deductions)</div>
-                                          </div>
-                                          <div className="p-2">
-                                            <div className="text-xs text-slate-400 uppercase tracking-wider mb-1">Actual Cash</div>
-                                            <div className="text-xl font-mono font-bold text-white">${actualCash.toFixed(2)}</div>
-                                          </div>
-                                          <div className="p-2">
-                                            <div className="text-xs text-slate-400 uppercase tracking-wider mb-1">Variance</div>
-                                            <div className={`text-2xl font-mono font-bold ${variance > 0 ? 'text-emerald-400' : variance < 0 ? 'text-rose-400' : 'text-blue-400'}`}>
-                                              {variance > 0 ? '+' : ''}{variance.toFixed(2)}
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </>
-                                  );
-                                })()}
-{r.tillCashBreakdown && r.tillCashBreakdown.length > 0 && (
-                            <div className="px-6 pb-6">
-                              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-[#1e345e] pb-2">Physical Cash Breakdown</h4>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                <div className="space-y-4">
-                                  <BreakdownSection title="Physical Cash Counted" items={r.tillCashBreakdown} />
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          {(r.notes || r.signature || (r.amendmentNotes && r.amendmentNotes.length > 0)) && (
-                            <div className="px-6 pb-6 mt-2">
-                              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-[#1e345e] pb-2">Notes & Verification</h4>
-                              {r.amendmentNotes && r.amendmentNotes.length > 0 && (
-                                <div className="mb-4 space-y-2">
-                                  <p className="text-xs text-slate-500 mb-1">Amendment History</p>
-                                  {(r.amendmentNotes || []).map((note: string, i: number) => (
-                                    <div key={i} className="text-sm text-yellow-500/90 bg-yellow-500/10 p-3 rounded-lg border border-yellow-500/20 leading-relaxed font-medium">
-                                      {note}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                              {r.notes && (
-                                <div className="mb-4">
-                                  <p className="text-xs text-slate-500 mb-1">Additional Notes</p>
-                                  <p className="text-sm text-slate-300 bg-[#061121] p-3 rounded-lg border border-[#1e345e]">{r.notes}</p>
-                                </div>
-                              )}
-                              {r.signature && (
-                                <div>
-                                  <p className="text-xs text-slate-500 mb-1">Digitally Signed By</p>
-                                  <p className="text-lg text-emerald-400 font-serif italic">{r.signature}</p>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </td>
-                      </motion.tr>
-                    )}
-                  </AnimatePresence>
+                  
                 </React.Fragment>
               ))}
             </tbody>
@@ -507,6 +297,13 @@ export function AccountantDashboard() {
         {showRates && (
           <ExchangeRatesModal rates={rates} onClose={() => setShowRates(false)} onUpdate={loadData} />
         )}
+        <ExportReportModal 
+          isOpen={showExportModal} 
+          onClose={() => setShowExportModal(false)} 
+          reconciliations={reconciliations} 
+          branches={branches} 
+        />
+        {viewingRecon && <ReconModal recon={viewingRecon} onClose={() => setViewingRecon(null)} />}
         {editingSalesId && (
           <InputSalesModal 
             reconciliation={(reconciliations || []).find(r => r.id === editingSalesId)} 
@@ -565,7 +362,7 @@ function ExchangeRatesModal({ rates, onClose, onUpdate }: any) {
                     </div>
                     <div>
                       <div className="text-sm font-medium text-white">1 {rate.currencyCode}</div>
-                      <div className="text-xs text-slate-500">Updated: {format(new Date(rate.effectiveDate), 'MMM d, yyyy HH:mm')}</div>
+                      <div className="text-xs text-slate-500">Updated: {safeFormat(rate.effectiveDate || new Date(), 'MMM d, yyyy HH:mm')}</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
@@ -609,7 +406,7 @@ function ExchangeRatesModal({ rates, onClose, onUpdate }: any) {
                         {h.currencyCode}: <span className="text-rose-400 line-through mr-1">${h.oldRate.toFixed(4)}</span> 
                         <span className="text-emerald-400">${h.newRate.toFixed(4)}</span>
                       </div>
-                      <div className="text-xs text-slate-500 mt-1">{format(new Date(h.changedAt), 'MMM d, yyyy HH:mm')}</div>
+                      <div className="text-xs text-slate-500 mt-1">{safeFormat(h.changedAt || new Date(), 'MMM d, yyyy HH:mm')}</div>
                     </div>
                   </div>
                 ))}

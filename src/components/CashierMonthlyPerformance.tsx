@@ -1,3 +1,4 @@
+import { safeFormat } from '../lib/formatDate';
 import React, { useMemo, useState } from 'react';
 import { DailyReconciliation } from '../lib/types';
 import { CalendarRange, Search } from 'lucide-react';
@@ -9,7 +10,7 @@ import { format, parseISO } from 'date-fns';
 export function CashierMonthlyPerformance({ reconciliations, branches }: { reconciliations: DailyReconciliation[], branches: Branch[] }) {
   const [selectedCashier, setSelectedCashier] = useState<{id: string, name: string} | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedMonth, setSelectedMonth] = useState<string>(format(new Date(), 'yyyy-MM'));
+  const [selectedMonth, setSelectedMonth] = useState<string>(safeFormat(new Date(), 'yyyy-MM'));
 
   const monthlyStats = useMemo(() => {
     const stats: Record<string, { id: string, name: string, branchName: string, overUSD: number, underUSD: number, overZAR: number, underZAR: number }> = {};
@@ -70,9 +71,9 @@ export function CashierMonthlyPerformance({ reconciliations, branches }: { recon
             className="bg-[#112240] border border-[#1e345e] text-white rounded py-1.5 px-3 text-sm focus:outline-none flex-1 sm:flex-none"
           >
             {availableMonths.map(m => (
-              <option key={m} value={m}>{format(parseISO(m + '-01'), 'MMMM yyyy')}</option>
+              <option key={m} value={m}>{safeFormat(parseISO(m + "-01"), "MMMM yyyy")}</option>
             ))}
-            {availableMonths.length === 0 && <option value={selectedMonth}>{format(parseISO(selectedMonth + '-01'), 'MMMM yyyy')}</option>}
+            {availableMonths.length === 0 && <option value={selectedMonth}>{safeFormat(parseISO(selectedMonth + "-01"), "MMMM yyyy")}</option>}
           </select>
         </div>
       </div>
