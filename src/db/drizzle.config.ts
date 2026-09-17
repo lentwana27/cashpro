@@ -9,11 +9,9 @@ const user = process.env.SQL_ADMIN_USER;
 const password = process.env.SQL_ADMIN_PASSWORD;
 
 let dbUrl = process.env.DATABASE_URL;
-  if (!dbUrl || dbUrl === 'undefined') {
-    dbUrl = 'postgresql://postgres.kzhdpuvbitlhdzfnzrxf:vIsionSibanda18%24@aws-0-eu-west-1.pooler.supabase.com:6543/postgres';
-  } else if (dbUrl && dbUrl.includes('db.kzhdpuvbitlhdzfnzrxf.supabase.co') && dbUrl.includes('[vIsionSibanda18$]')) {
-    dbUrl = 'postgresql://postgres.kzhdpuvbitlhdzfnzrxf:vIsionSibanda18%24@aws-0-eu-west-1.pooler.supabase.com:6543/postgres';
-  }
+if (!dbUrl || dbUrl === 'undefined') {
+  dbUrl = undefined;
+}
 
 if (!dbUrl && (!sqlHost || !sqlDbName || !user || !password)) {
   throw new Error("Missing database connection variables");
@@ -22,8 +20,7 @@ if (!dbUrl && (!sqlHost || !sqlDbName || !user || !password)) {
 export default defineConfig({
   schema: "./src/db/schema.ts",
   out: "./drizzle",
-  dialect: "postgresql",
-  schemaFilter: ["public"],
+  dialect: "mysql",
   dbCredentials: dbUrl ? {
     url: dbUrl,
   } : {
@@ -31,7 +28,6 @@ export default defineConfig({
     user: user as string,
     password: password as string,
     database: sqlDbName as string,
-    ssl: false,
   },
   verbose: true,
 });

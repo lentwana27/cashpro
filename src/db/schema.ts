@@ -1,9 +1,8 @@
-import { relations } from 'drizzle-orm';
-import { jsonb, pgTable, text, timestamp, doublePrecision, boolean, uuid } from 'drizzle-orm/pg-core';
+import { mysqlTable, json, text, varchar, timestamp, double, boolean } from 'drizzle-orm/mysql-core';
 
-export const users = pgTable('users', {
-  id: text('id').primaryKey(),
-  uid: text('uid').unique(), // Firebase Auth UID
+export const users = mysqlTable('users', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  uid: varchar('uid', { length: 191 }).unique(), // Firebase Auth UID
   name: text('name').notNull(),
   email: text('email').notNull(),
   passwordHash: text('password_hash'),
@@ -17,8 +16,8 @@ export const users = pgTable('users', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
-export const messages = pgTable('messages', {
-  id: text('id').primaryKey(),
+export const messages = mysqlTable('messages', {
+  id: varchar('id', { length: 36 }).primaryKey(),
   fromId: text('from_id').notNull(),
   toId: text('to_id').notNull(),
   content: text('content').notNull(),
@@ -26,36 +25,36 @@ export const messages = pgTable('messages', {
   read: boolean('read').default(false),
 });
 
-export const branches = pgTable('branches', {
-  id: text('id').primaryKey(),
+export const branches = mysqlTable('branches', {
+  id: varchar('id', { length: 36 }).primaryKey(),
   name: text('name').notNull(),
   code: text('code').notNull(),
   location: text('location').notNull(),
   active: boolean('active').default(true),
-  lat: doublePrecision('lat'),
-  lng: doublePrecision('lng'),
+  lat: double('lat'),
+  lng: double('lng'),
   hasTills: boolean('has_tills').default(false),
-  tills: jsonb('tills'),
+  tills: json('tills'),
 });
 
-export const exchangeRates = pgTable('exchange_rates', {
-  id: text('id').primaryKey(),
+export const exchangeRates = mysqlTable('exchange_rates', {
+  id: varchar('id', { length: 36 }).primaryKey(),
   currencyCode: text('currency_code').notNull(),
-  rateToUsd: doublePrecision('rate_to_usd').notNull(),
+  rateToUsd: double('rate_to_usd').notNull(),
   effectiveDate: text('effective_date').notNull(),
 });
 
-export const exchangeRateHistory = pgTable('exchange_rate_history', {
-  id: text('id').primaryKey(),
+export const exchangeRateHistory = mysqlTable('exchange_rate_history', {
+  id: varchar('id', { length: 36 }).primaryKey(),
   currencyCode: text('currency_code').notNull(),
-  oldRate: doublePrecision('old_rate').notNull(),
-  newRate: doublePrecision('new_rate').notNull(),
+  oldRate: double('old_rate').notNull(),
+  newRate: double('new_rate').notNull(),
   changedByUserId: text('changed_by_user_id').notNull(),
   changedAt: text('changed_at').notNull(),
 });
 
-export const reconciliations = pgTable('reconciliations', {
-  id: text('id').primaryKey(),
+export const reconciliations = mysqlTable('reconciliations', {
+  id: varchar('id', { length: 36 }).primaryKey(),
   branchId: text('branch_id').notNull(),
   supervisorId: text('supervisor_id').notNull(),
   date: text('date').notNull(),
@@ -64,35 +63,35 @@ export const reconciliations = pgTable('reconciliations', {
   salesInputtedByName: text('sales_inputted_by_name'),
   auditorAmendmentApproval: boolean('auditor_amendment_approval').default(false),
   accountantAmendmentApproval: boolean('accountant_amendment_approval').default(false),
-  
-  totalSales: jsonb('total_sales'),
-  depositsReceived: jsonb('deposits_received'),
-  manualSalesToday: jsonb('manual_sales_today'),
-  debtors: jsonb('debtors'),
-  depositClaims: jsonb('deposit_claims'),
-  returnsRefunds: jsonb('returns_refunds'),
-  expenses: jsonb('expenses'),
-  purchases: jsonb('purchases'),
-  manualSalesPrevious: jsonb('manual_sales_previous'),
-  endOfDayCash: jsonb('end_of_day_cash'),
-  tillCashBreakdown: jsonb('till_cash_breakdown'),
-  tillVariances: jsonb('till_variances'),
-  
-  expectedCashUsd: doublePrecision('expected_cash_usd').notNull(),
-  varianceUsd: doublePrecision('variance_usd').notNull(),
-  
+
+  totalSales: json('total_sales'),
+  depositsReceived: json('deposits_received'),
+  manualSalesToday: json('manual_sales_today'),
+  debtors: json('debtors'),
+  depositClaims: json('deposit_claims'),
+  returnsRefunds: json('returns_refunds'),
+  expenses: json('expenses'),
+  purchases: json('purchases'),
+  manualSalesPrevious: json('manual_sales_previous'),
+  endOfDayCash: json('end_of_day_cash'),
+  tillCashBreakdown: json('till_cash_breakdown'),
+  tillVariances: json('till_variances'),
+
+  expectedCashUsd: double('expected_cash_usd').notNull(),
+  varianceUsd: double('variance_usd').notNull(),
+
   status: text('status').notNull(),
   accountantNotes: text('accountant_notes'),
   notes: text('notes'),
   signature: text('signature'),
-  amendmentNotes: jsonb('amendment_notes'),
-  
+  amendmentNotes: json('amendment_notes'),
+
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });
 
-export const systemLogs = pgTable('system_logs', {
-  id: text('id').primaryKey(),
+export const systemLogs = mysqlTable('system_logs', {
+  id: varchar('id', { length: 36 }).primaryKey(),
   userId: text('user_id').notNull(),
   userName: text('user_name').notNull(),
   action: text('action').notNull(),
@@ -100,10 +99,10 @@ export const systemLogs = pgTable('system_logs', {
   timestamp: text('timestamp').notNull(),
 });
 
-export const systemUpdates = pgTable('system_updates', {
-  id: text('id').primaryKey(),
+export const systemUpdates = mysqlTable('system_updates', {
+  id: varchar('id', { length: 36 }).primaryKey(),
   date: text('date').notNull(),
   title: text('title').notNull(),
-  features: jsonb('features').notNull(),
-  targetRoles: jsonb('target_roles').notNull(), // e.g. ["DIRECTOR", "ADMIN", "SUPERVISOR"]
+  features: json('features').notNull(),
+  targetRoles: json('target_roles').notNull(), // e.g. ["DIRECTOR", "ADMIN", "SUPERVISOR"]
 });

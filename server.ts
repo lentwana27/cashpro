@@ -11,7 +11,7 @@ import * as schema from './src/db/schema.js';
 import { eq, desc, or } from 'drizzle-orm';
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 app.use(compression());
 app.use(cors());
