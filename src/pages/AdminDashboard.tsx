@@ -41,11 +41,11 @@ export function AdminDashboard() {
   const loadData = async () => {
     try {
       const [usrs, brs, recs, lgs, upds] = await Promise.all([
-        api.get('/updates').catch(() => []),
         api.get('/users'),
         api.get('/branches'),
         api.get('/reconciliations'),
-        api.get('/logs').catch(() => [])
+        api.get('/logs').catch(() => []),
+        api.get('/updates').catch(() => [])
       ]);
       setUsers(usrs.filter((u: User) => u.role !== 'ADMIN'));
       setBranches(brs);
