@@ -11,6 +11,7 @@ export function ExchangeRatesModal({ rates, onClose, onUpdate }: any) {
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
   const { user } = useAuth();
+  const canEdit = user?.role === 'ADMIN' || user?.role === 'HEAD_ACCOUNTANT';
 
   useEffect(() => {
     api.get('/rates/history').then(res => setHistory(res)).catch(console.error);
@@ -68,9 +69,11 @@ export function ExchangeRatesModal({ rates, onClose, onUpdate }: any) {
                     ) : (
                       <div className="flex items-center gap-4">
                         <span className="font-bold text-emerald-400">${rate.rateToUsd.toFixed(4)}</span>
-                        <button onClick={() => { setEditing(rate.currencyCode); setNewRate(rate.rateToUsd.toString()); }} className="text-slate-500 hover:text-white">
-                          <RefreshCw className="w-4 h-4" />
-                        </button>
+                        {canEdit && (
+                          <button onClick={() => { setEditing(rate.currencyCode); setNewRate(rate.rateToUsd.toString()); }} className="text-slate-500 hover:text-white">
+                            <RefreshCw className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>

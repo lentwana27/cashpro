@@ -24,6 +24,21 @@ app.use(express.json());
 const api = express.Router();
 api.get("/health", (req, res) => res.json({ status: "ok" }));
 
+function requireRole(...roles: string[]) {
+  return async (req: any, res: any, next: any) => {
+    const uid = req.headers['x-user-id'] as string;
+    if (!uid) {
+      return res.status(401).json({ error: 'Missing user identity' });
+    }
+    const users = await db.select().from(schema.users).where(eq(schema.users.id, uid));
+    const user = users[0];
+    if (!user || !roles.includes(user.role)) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+    next();
+  };
+}
+
 async function logAction(userId: string, userName: string, action: string, details: string) {
   try {
     await db.insert(schema.systemLogs).values({
@@ -151,7 +166,7 @@ api.get('/rates/history', async (req, res) => {
   res.json(history);
 });
 
-api.post('/rates', async (req, res) => {
+api.post('/rates', requireRole('ADMIN', 'HEAD_ACCOUNTANT'), async (req, res) => {
   const { code, rate, userId } = req.body;
   const rates = await db.select().from(schema.exchangeRates).where(eq(schema.exchangeRates.currencyCode, code));
   const existingRate = rates[0];
@@ -178,7 +193,7 @@ api.post('/rates', async (req, res) => {
   }
 });
 
-api.put('/rates/:code', async (req, res) => {
+api.put('/rates/:code', requireRole('ADMIN', 'HEAD_ACCOUNTANT'), async (req, res) => {
   const code = req.params.code;
   const { newRate, userId } = req.body;
   const rates = await db.select().from(schema.exchangeRates).where(eq(schema.exchangeRates.currencyCode, code));
