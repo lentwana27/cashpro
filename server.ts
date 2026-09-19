@@ -352,11 +352,6 @@ api.put('/reconciliations/:id', async (req, res) => {
   res.json(recs[0] || {});
 });
 
-api.use((req, res) => {
-  res.status(404).json({ error: 'API Endpoint Not Found' });
-});
-
-
 // System Updates Routes
 api.get('/updates', async (req, res) => {
   try {
@@ -396,6 +391,10 @@ api.delete('/updates/:id', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete update' });
   }
+});
+
+api.use((req, res) => {
+  res.status(404).json({ error: 'API Endpoint Not Found' });
 });
 
 app.use('/api', api);
