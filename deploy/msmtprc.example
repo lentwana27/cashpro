@@ -1,0 +1,21 @@
+# Template for /root/.msmtprc on the VPS — used by restore-drill-cashpro.sh
+# to email failure alerts. Copy to /root/.msmtprc, fill in the real password,
+# then: chmod 600 /root/.msmtprc
+#
+# The real file (with the actual password) must never be committed.
+
+defaults
+auth           on
+tls            on
+tls_starttls   off
+tls_trust_file /etc/ssl/certs/ca-certificates.crt
+logfile        /var/log/msmtp.log
+
+account        cashpro-alerts
+host           YOUR_SMTP_HOST
+port           465
+from           ALERT_FROM_EMAIL
+user           ALERT_FROM_EMAIL
+password       REPLACE_ME
+
+account default : cashpro-alerts

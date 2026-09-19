@@ -1,0 +1,19 @@
+# CashPro backend systemd unit — dedicated service, own port, own DB. Does not touch the ERP service.
+[Unit]
+Description=CashPro Reconciliation App
+After=network.target mysql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cashpro
+Group=cashpro
+WorkingDirectory=/opt/cashpro
+ExecStart=/usr/bin/node dist/server.js
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

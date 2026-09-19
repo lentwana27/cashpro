@@ -1,0 +1,2 @@
+# Daily backup of the cashpro MySQL database (isolated from any ERP backup routine)
+30 2 * * * root /root/backup-cashpro.sh >> /var/log/cashpro-backup.log 2>&1
