@@ -2,7 +2,8 @@ import { safeFormat } from '../lib/formatDate';
 import { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { User, Branch, SystemLog } from '../lib/types';
-import { Users, Building2, Megaphone, CheckCircle, ShieldCheck, MapPin, Edit3, X, Download, Database, Activity, Plus, Trash2 } from 'lucide-react';
+import { Users, Building2, Megaphone, CheckCircle, ShieldCheck, MapPin, Edit3, X, Download, Database, Activity, Plus, Trash2, Settings } from 'lucide-react';
+import { ExchangeRatesModal } from '../components/ExchangeRatesModal';
 import clsx from 'clsx';
 import { format } from 'date-fns';
 
@@ -32,6 +33,9 @@ export function AdminDashboard() {
   const [logDateFilter, setLogDateFilter] = useState('');
   const [logSuspiciousOnly, setLogSuspiciousOnly] = useState(false);
 
+  const [rates, setRates] = useState<any[]>([]);
+  const [showRates, setShowRates] = useState(false);
+
   useEffect(() => {
     loadData();
     const interval = setInterval(loadData, 5000);
@@ -40,18 +44,20 @@ export function AdminDashboard() {
 
   const loadData = async () => {
     try {
-      const [usrs, brs, recs, lgs, upds] = await Promise.all([
+      const [usrs, brs, recs, lgs, upds, rts] = await Promise.all([
         api.get('/users'),
         api.get('/branches'),
         api.get('/reconciliations'),
         api.get('/logs').catch(() => []),
-        api.get('/updates').catch(() => [])
+        api.get('/updates').catch(() => []),
+        api.get('/rates').catch(() => [])
       ]);
       setUsers(usrs.filter((u: User) => u.role !== 'ADMIN'));
       setBranches(brs);
       setReconciliations(recs);
       setLogs(lgs.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
       setUpdates(upds.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+      setRates(rts);
     } catch (e) {
       // Ignore network errors during polling
     }
@@ -167,14 +173,27 @@ export function AdminDashboard() {
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <h1 className="text-3xl font-bold text-white tracking-tight">System Administration</h1>
-        <button 
-          onClick={downloadSystemBackup}
-          className="flex items-center gap-2 px-4 py-2 bg-[#112240] hover:bg-[#1a2d53] border border-[#1e345e] rounded-lg text-sm font-medium transition-colors"
-        >
-          <Database className="w-4 h-4 text-emerald-400" />
-          Backup All Data 
-        </button>
+        <div className="flex flex-wrap gap-4">
+          <button
+            onClick={() => setShowRates(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-[#112240] hover:bg-[#1a2d53] border border-[#1e345e] rounded-lg text-sm font-medium transition-colors"
+          >
+            <Settings className="w-4 h-4 text-emerald-400" />
+            Manage Exchange Rates
+          </button>
+          <button
+            onClick={downloadSystemBackup}
+            className="flex items-center gap-2 px-4 py-2 bg-[#112240] hover:bg-[#1a2d53] border border-[#1e345e] rounded-lg text-sm font-medium transition-colors"
+          >
+            <Database className="w-4 h-4 text-emerald-400" />
+            Backup All Data
+          </button>
+        </div>
       </div>
+
+      {showRates && (
+        <ExchangeRatesModal rates={rates} onClose={() => setShowRates(false)} onUpdate={loadData} />
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         
