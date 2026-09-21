@@ -19,7 +19,6 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import clsx from "clsx";
-import { format } from "date-fns";
 
 export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: string }) {
   const { user } = useAuth();
@@ -208,25 +207,6 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
   const currentMissingSales = submitted && !submitted.salesConfirmed;
   const preventNewCashUp = !submitted && missingSalesRecs.length > 0;
 
-  const completelyMissingDates = useMemo(() => {
-    if (!history) return [];
-    const missing = [];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    for (let i = 1; i <= 7; i++) {
-      const d = new Date(today);
-      d.setDate(d.getDate() - i);
-      const dStr = format(d, "yyyy-MM-dd");
-      if (!history.some((r) => r.date === dStr)) {
-        missing.push(dStr);
-      }
-    }
-    return missing;
-  }, [history]);
-
-  
-
-
   const requestUnlock = async (dStr: string) => {
     try {
       await api.post("/reconciliations", {
@@ -317,25 +297,6 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
             loadData();
           }}
         />
-      ) : completelyMissingDates.includes(date) && date !== todayStr ? (
-        <div className="bg-[#0a192f] border border-rose-500/50 shadow-2xl rounded-2xl p-4 sm:p-6 md:p-8 text-center ring-1 ring-inset ring-rose-500/10">
-          <div className="mx-auto w-16 h-16 bg-rose-500/20 rounded-full flex items-center justify-center mb-4 border border-rose-500/50">
-            <AlertCircle className="w-8 h-8 text-rose-400" />
-          </div>
-          <h2 className="text-2xl font-bold text-white mb-2">
-            Missing Reconciliation
-          </h2>
-          <p className="text-slate-400 mb-8">
-            You skipped the daily cash-up for{" "}
-            {safeFormat(date || new Date(), "MMMM do, yyyy")}. You must request an unlock to fill in the reconciliation for this date.
-          </p>
-          <button
-            onClick={() => requestUnlock(date)}
-            className="px-8 py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-lg transition-colors"
-          >
-            Request Missing Cash-Up
-          </button>
-        </div>
       ) : submitted && submitted.status === "UNLOCK_REQUESTED" ? (
         <div className="bg-[#0a192f] border border-amber-500/50 shadow-2xl rounded-2xl p-4 sm:p-6 md:p-8 text-center ring-1 ring-inset ring-amber-500/10">
           <div className="mx-auto w-16 h-16 bg-amber-500/20 rounded-full flex items-center justify-center mb-4 border border-amber-500/50">
