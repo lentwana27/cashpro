@@ -343,7 +343,25 @@ api.post('/reconciliations', async (req, res) => {
 api.put('/reconciliations/:id', async (req, res) => {
   const uid = req.headers['x-user-id'] as string;
   const uname = req.headers['x-user-name'] as string;
-  
+
+  const updates: any = { ...req.body };
+
+  // An amendment needs both the accountant's and the auditor's approval. Each
+  // approval only ever sets its own flag client-side (to avoid racing on a
+  // possibly-stale view of the other party's flag), so the transition to
+  // AMENDMENT_APPROVED is decided here, against the current DB row, once.
+  if (!updates.status && (updates.accountantAmendmentApproval || updates.auditorAmendmentApproval)) {
+    const existingRows = await db.select().from(schema.reconciliations).where(eq(schema.reconciliations.id, req.params.id));
+    const existing = existingRows[0];
+    if (existing) {
+      const accountantApproved = updates.accountantAmendmentApproval ?? existing.accountantAmendmentApproval;
+      const auditorApproved = updates.auditorAmendmentApproval ?? existing.auditorAmendmentApproval;
+      if (accountantApproved && auditorApproved && existing.status !== 'AMENDMENT_APPROVED') {
+        updates.status = 'AMENDMENT_APPROVED';
+      }
+    }
+  }
+
   if (uid && uname) {
     if (req.body.salesConfirmed === true) {
       logAction(uid, uname, 'CONFIRM SALES', `Locked sales for reconciliation ${req.params.id}`);
@@ -357,12 +375,12 @@ api.put('/reconciliations/:id', async (req, res) => {
     if (req.body.accountantAmendmentApproval) {
       logAction(uid, uname, 'ACCT AMENDMENT APPROVAL', `Accountant approved amendment for ${req.params.id}`);
     }
-    if (req.body.status) {
-      logAction(uid, uname, 'UPDATE STATUS', `Status changed to ${req.body.status} for ${req.params.id}`);
+    if (updates.status) {
+      logAction(uid, uname, 'UPDATE STATUS', `Status changed to ${updates.status} for ${req.params.id}`);
     }
   }
 
-  await db.update(schema.reconciliations).set({ ...req.body, updatedAt: new Date().toISOString() }).where(eq(schema.reconciliations.id, req.params.id));
+  await db.update(schema.reconciliations).set({ ...updates, updatedAt: new Date().toISOString() }).where(eq(schema.reconciliations.id, req.params.id));
   const recs = await db.select().from(schema.reconciliations).where(eq(schema.reconciliations.id, req.params.id));
   res.json(recs[0] || {});
 });

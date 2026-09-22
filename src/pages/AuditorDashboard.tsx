@@ -63,11 +63,11 @@ export function AuditorDashboard() {
 
   const updateStatus = async (id: string, status: string, recon?: any) => {
     if (status === 'AMENDMENT_APPROVED' && recon) {
-      const updates: any = { auditorAmendmentApproval: true };
-      if (recon.accountantAmendmentApproval) {
-        updates.status = 'AMENDMENT_APPROVED';
-      }
-      await api.put(`/reconciliations/${id}`, updates);
+      // The server decides whether both parties have now approved and flips
+      // the status itself, against the current DB row - not this possibly
+      // stale `recon` snapshot - so two near-simultaneous approvals can't
+      // race and leave the status stuck behind two true flags.
+      await api.put(`/reconciliations/${id}`, { auditorAmendmentApproval: true });
     } else {
       await api.put(`/reconciliations/${id}`, { status });
     }

@@ -820,7 +820,9 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
                   
                   await api.put(`/reconciliations/${submitted.id}`, {
                     status: "AMENDMENT_REQUESTED",
-                    amendmentNotes: updatedNotes
+                    amendmentNotes: updatedNotes,
+                    accountantAmendmentApproval: false,
+                    auditorAmendmentApproval: false,
                   });
                   setShowAmendModal(false);
                   setAmendReason("");
