@@ -1,28 +1,33 @@
 import { safeFormat } from '../lib/formatDate';
 import React from 'react';
 import { useAuth } from '../components/AuthProvider';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Check, Edit2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { X } from 'lucide-react';
 import clsx from 'clsx';
-import html2canvas from 'html2canvas-pro';
 import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { Download } from 'lucide-react';
-import { useRef } from 'react';
+
+const money = (n: any) => `$${(Number(n) || 0).toFixed(2)}`;
+
+const getCashierName = (item: any, tillVariances?: any[]): string | null => {
+  if (item.cashierName && item.cashierName !== 'Unknown') return item.cashierName;
+  if (tillVariances) {
+    const tv = tillVariances.find((t: any) => t.tillName === item.description);
+    if (tv?.cashierName && tv.cashierName !== 'Unknown') return tv.cashierName;
+  }
+  return null;
+};
 
 const BreakdownSection = ({ title, items, tillVariances }: { title: string, items: any, tillVariances?: any[] }) => {
   const arr = Array.isArray(items) ? items : items ? [items] : [];
   if (arr.length === 0) return null;
   const total = arr.reduce((a:number,b:any)=>a+(b.usdEquivalent||0), 0);
 
-  const cashierFor = (item: any) => {
-    if (item.cashierName) return item.cashierName;
-    if (!tillVariances) return null;
-    const tv = tillVariances.find((t: any) => t.tillName === item.description);
-    return tv?.cashierName && tv.cashierName !== 'Unknown' ? tv.cashierName : null;
-  };
+  const cashierFor = (item: any) => getCashierName(item, tillVariances);
 
   return (
     <div className="mb-4">
@@ -55,22 +60,216 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
   const [editingNoteIdx, setEditingNoteIdx] = useState<number | null>(null);
   const [noteInput, setNoteInput] = useState('');
   const [saving, setSaving] = useState(false);
-  const pdfRef = useRef<HTMLDivElement>(null);
   const [downloading, setDownloading] = useState(false);
+  const [branches, setBranches] = useState<any[]>([]);
 
-  
-  const downloadPdf = async () => {
-    if (!pdfRef.current) return;
+  useEffect(() => {
+    api.get('/branches').then(setBranches).catch(() => {});
+  }, []);
+
+  const downloadPdf = () => {
     try {
       setDownloading(true);
-      const canvas = await html2canvas(pdfRef.current, { scale: 2, backgroundColor: '#0a192f', useCORS: true });
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-      
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`Reconciliation_${localRecon.date}_${localRecon.branchId}.pdf`);
+      const branchName = (branches || []).find((b: any) => b.id === localRecon.branchId)?.name || localRecon.branchId;
+      const doc = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const marginX = 14;
+      let y = 36;
+
+      const ensureSpace = (needed: number) => {
+        if (y + needed > pageHeight - 18) {
+          doc.addPage();
+          y = 20;
+        }
+      };
+
+      // Header banner
+      doc.setFillColor(10, 25, 47);
+      doc.rect(0, 0, pageWidth, 28, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Reconciliation Report', marginX, 13);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(
+        `${branchName}   |   ${safeFormat(localRecon.date || new Date(), 'MMMM dd, yyyy')}   |   ${localRecon.status}`,
+        marginX, 21
+      );
+      doc.setTextColor(0, 0, 0);
+
+      // Summary
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Summary', marginX, y);
+      y += 4;
+      const varianceUsd = localRecon.varianceUsd || 0;
+      const varianceColor: [number, number, number] = varianceUsd > 0 ? [16, 185, 129] : varianceUsd < 0 ? [244, 63, 94] : [59, 130, 246];
+      autoTable(doc, {
+        startY: y,
+        margin: { left: marginX, right: marginX },
+        theme: 'grid',
+        styles: { fontSize: 9, cellPadding: 3, halign: 'center' },
+        headStyles: { fillColor: [17, 34, 64] },
+        head: [['Expected Cash (USD)', 'Physical Cash Counted (USD)', 'Variance (USD)']],
+        body: [[
+          money(localRecon.expectedCashUsd),
+          money(localRecon.endOfDayCash?.usdEquivalent),
+          `${varianceUsd > 0 ? '+' : ''}${money(varianceUsd)}`,
+        ]],
+        didParseCell: (data: any) => {
+          if (data.section === 'body' && data.column.index === 2) {
+            data.cell.styles.textColor = varianceColor;
+            data.cell.styles.fontStyle = 'bold';
+          }
+        },
+      });
+      y = (doc as any).lastAutoTable.finalY + 10;
+
+      const itemRows = (sections: { label: string, items: any }[], tillVariances?: any[]) => {
+        const rows: any[] = [];
+        let total = 0;
+        sections.forEach(({ label, items }) => {
+          const arr = Array.isArray(items) ? items : items ? [items] : [];
+          arr.forEach((item: any) => {
+            total += item.usdEquivalent || 0;
+            rows.push([
+              label,
+              item.description || 'Unnamed',
+              getCashierName(item, tillVariances) || '-',
+              `${item.amount ?? '-'} ${item.currencyCode || ''}`.trim(),
+              money(item.usdEquivalent),
+            ]);
+          });
+        });
+        return { rows, total };
+      };
+
+      const addItemTable = (title: string, sections: { label: string, items: any }[], tillVariances?: any[]) => {
+        const { rows, total } = itemRows(sections, tillVariances);
+        if (rows.length === 0) return;
+        ensureSpace(20);
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text(title, marginX, y);
+        y += 4;
+        autoTable(doc, {
+          startY: y,
+          margin: { left: marginX, right: marginX },
+          theme: 'striped',
+          styles: { fontSize: 8, cellPadding: 2.5 },
+          headStyles: { fillColor: [17, 34, 64] },
+          footStyles: { fillColor: [230, 230, 230], textColor: [0, 0, 0], fontStyle: 'bold' },
+          head: [['Section', 'Description', 'Cashier', 'Amount', 'USD Equivalent']],
+          body: rows,
+          foot: [['', '', '', 'Total', money(total)]],
+        });
+        y = (doc as any).lastAutoTable.finalY + 10;
+      };
+
+      addItemTable('Income', [
+        { label: 'Total Sales', items: localRecon.totalSales },
+        { label: 'Deposits Received', items: localRecon.depositsReceived },
+        { label: 'Manual Sales (Today)', items: localRecon.manualSalesToday },
+      ], localRecon.tillVariances);
+
+      addItemTable('Deductions', [
+        { label: 'Debtors', items: localRecon.debtors },
+        { label: 'Deposit Claims', items: localRecon.depositClaims },
+        { label: 'Returns / Refunds', items: localRecon.returnsRefunds },
+        { label: 'Expenses', items: localRecon.expenses },
+        { label: 'Purchases', items: localRecon.purchases },
+        { label: 'Manual Sales (Previous Days)', items: localRecon.manualSalesPrevious },
+      ]);
+
+      if (localRecon.tillVariances && localRecon.tillVariances.length > 0) {
+        ensureSpace(20);
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Till Variances', marginX, y);
+        y += 4;
+        autoTable(doc, {
+          startY: y,
+          margin: { left: marginX, right: marginX },
+          theme: 'striped',
+          styles: { fontSize: 8, cellPadding: 2.5 },
+          headStyles: { fillColor: [17, 34, 64] },
+          head: [['Till', 'Cashier', 'Expected (USD)', 'Actual (USD)', 'Variance (USD)', 'Note']],
+          body: localRecon.tillVariances.map((tv: any) => [
+            tv.tillName,
+            tv.cashierName && tv.cashierName !== 'Unknown' ? tv.cashierName : 'Not identified',
+            money(tv.expected),
+            money(tv.actual),
+            `${(tv.variance || 0) > 0 ? '+' : ''}${money(tv.variance)}`,
+            tv.note || '-',
+          ]),
+          didParseCell: (data: any) => {
+            if (data.section === 'body' && data.column.index === 4) {
+              const v = localRecon.tillVariances[data.row.index]?.variance || 0;
+              data.cell.styles.textColor = v > 0 ? [16, 185, 129] : v < 0 ? [244, 63, 94] : [59, 130, 246];
+              data.cell.styles.fontStyle = 'bold';
+            }
+          },
+        });
+        y = (doc as any).lastAutoTable.finalY + 10;
+      }
+
+      if (localRecon.tillCashBreakdown && localRecon.tillCashBreakdown.length > 0) {
+        addItemTable('Physical Cash Breakdown', [
+          { label: '', items: localRecon.tillCashBreakdown },
+        ]);
+      }
+
+      const notesBlocks: { heading: string, lines: string[], color?: [number, number, number] }[] = [];
+      if (localRecon.amendmentNotes && localRecon.amendmentNotes.length > 0) {
+        notesBlocks.push({ heading: 'Amendment History', lines: localRecon.amendmentNotes, color: [161, 98, 7] });
+      }
+      if (localRecon.notes) {
+        notesBlocks.push({ heading: 'Additional Notes', lines: [localRecon.notes] });
+      }
+      if (localRecon.signature) {
+        notesBlocks.push({ heading: 'Digitally Signed By', lines: [localRecon.signature], color: [16, 185, 129] });
+      }
+
+      if (notesBlocks.length > 0) {
+        ensureSpace(16);
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0, 0, 0);
+        doc.text('Notes & Verification', marginX, y);
+        y += 7;
+        notesBlocks.forEach(({ heading, lines, color }) => {
+          ensureSpace(12);
+          doc.setFontSize(9);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(90, 90, 90);
+          doc.text(heading, marginX, y);
+          y += 5;
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(...(color || [30, 30, 30]));
+          lines.forEach((line) => {
+            const wrapped = doc.splitTextToSize(line, pageWidth - marginX * 2);
+            wrapped.forEach((wrappedLine: string) => {
+              ensureSpace(6);
+              doc.text(wrappedLine, marginX, y);
+              y += 5;
+            });
+          });
+          y += 3;
+        });
+      }
+
+      const pageCount = doc.internal.pages.length - 1;
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(140, 140, 140);
+        doc.text(`Generated ${safeFormat(new Date(), 'yyyy-MM-dd HH:mm')}`, marginX, pageHeight - 8);
+        doc.text(`Page ${i} of ${pageCount}`, pageWidth - marginX, pageHeight - 8, { align: 'right' });
+      }
+
+      doc.save(`Reconciliation_${localRecon.date}_${branchName.replace(/\s+/g, '_')}.pdf`);
     } catch (error) {
       console.error('Error generating PDF', error);
       alert('Failed to generate PDF. Check console for details.');
@@ -78,7 +277,7 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
       setDownloading(false);
     }
   };
-  
+
   const saveNote = async (idx: number) => {
     try {
       setSaving(true);
@@ -111,11 +310,14 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
           <X className="w-5 h-5" />
         </button>
     </div>
-    <div ref={pdfRef} className="bg-[#0a192f] flex-1 flex flex-col">
+    <div className="bg-[#0a192f] flex-1 flex flex-col">
       <div className="p-6 border-b border-[#1e345e] flex justify-between items-center bg-[#0a192f] z-10 pr-48">
         <div>
           <h2 className="text-xl font-bold text-white">Reconciliation Details</h2>
-          <p className="text-sm text-slate-400 mt-1">{safeFormat(localRecon.date || new Date(), "MMMM dd, yyyy")} - <span className="font-mono text-emerald-400">{localRecon.status}</span></p>
+          <p className="text-sm text-slate-400 mt-1">
+            {(branches || []).find((b: any) => b.id === localRecon.branchId)?.name || localRecon.branchId} &middot;{" "}
+            {safeFormat(localRecon.date || new Date(), "MMMM dd, yyyy")} - <span className="font-mono text-emerald-400">{localRecon.status}</span>
+          </p>
         </div>
       </div>
       <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8 bg-[#061121]">
