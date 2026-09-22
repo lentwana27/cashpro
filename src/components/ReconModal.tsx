@@ -12,11 +12,18 @@ import jsPDF from 'jspdf';
 import { Download } from 'lucide-react';
 import { useRef } from 'react';
 
-const BreakdownSection = ({ title, items }: { title: string, items: any }) => {
+const BreakdownSection = ({ title, items, tillVariances }: { title: string, items: any, tillVariances?: any[] }) => {
   const arr = Array.isArray(items) ? items : items ? [items] : [];
   if (arr.length === 0) return null;
   const total = arr.reduce((a:number,b:any)=>a+(b.usdEquivalent||0), 0);
-  
+
+  const cashierFor = (item: any) => {
+    if (item.cashierName) return item.cashierName;
+    if (!tillVariances) return null;
+    const tv = tillVariances.find((t: any) => t.tillName === item.description);
+    return tv?.cashierName && tv.cashierName !== 'Unknown' ? tv.cashierName : null;
+  };
+
   return (
     <div className="mb-4">
       <div className="flex justify-between font-medium text-slate-300 text-sm mb-2">
@@ -24,15 +31,19 @@ const BreakdownSection = ({ title, items }: { title: string, items: any }) => {
         <span className="font-mono text-white">${total.toFixed(2)}</span>
       </div>
       <div className="space-y-1.5 border-l-2 border-[#1e345e] ml-1 pl-3">
-        {arr.map((item: any, idx: number) => (
-          <div key={idx} className="flex justify-between text-xs">
-            <span className="text-slate-400">
-              {item.description || 'Unnamed'}{item.date ? ` [${item.date}]` : ""} 
-              {(item.amount || item.amount === 0) && <span className="text-slate-500 ml-1">({item.amount} {item.currencyCode})</span>}
-            </span>
-            <span className="text-slate-300 font-mono">${(item.usdEquivalent||0).toFixed(2)}</span>
-          </div>
-        ))}
+        {arr.map((item: any, idx: number) => {
+          const cashierName = cashierFor(item);
+          return (
+            <div key={idx} className="flex justify-between text-xs">
+              <span className="text-slate-400">
+                {item.description || 'Unnamed'}{item.date ? ` [${item.date}]` : ""}
+                {cashierName && <span className="text-emerald-400/80 ml-1">(Cashier: {cashierName})</span>}
+                {(item.amount || item.amount === 0) && <span className="text-slate-500 ml-1">({item.amount} {item.currencyCode})</span>}
+              </span>
+              <span className="text-slate-300 font-mono">${(item.usdEquivalent||0).toFixed(2)}</span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -111,7 +122,7 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
           <div>
             <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-[#1e345e] pb-2">Income breakdown</h4>
             <div className="space-y-4">
-              <BreakdownSection title="Total Sales" items={localRecon.totalSales} />
+              <BreakdownSection title="Total Sales" items={localRecon.totalSales} tillVariances={localRecon.tillVariances} />
               <BreakdownSection title="Deposits Received" items={localRecon.depositsReceived} />
               <BreakdownSection title="Manual Sales Not Captured Today" items={localRecon.manualSalesToday} />
             </div>
@@ -139,7 +150,7 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
                   <div className="flex justify-between items-start mb-2">
                     <div>
                       <div className="font-bold text-white">{tv.tillName}</div>
-                      <div className="text-sm text-slate-400">Cashier: {tv.cashierName}</div>
+                      <div className="text-sm text-slate-400">Cashier: {tv.cashierName && tv.cashierName !== 'Unknown' ? tv.cashierName : 'Not identified'}</div>
                     </div>
                     <div className="text-right">
                       <div className={clsx("font-bold font-mono", (tv.variance || 0) > 0 ? "text-emerald-400" : (tv.variance || 0) < 0 ? "text-rose-400" : "text-blue-400")}>
