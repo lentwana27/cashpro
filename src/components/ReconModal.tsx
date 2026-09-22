@@ -7,7 +7,7 @@ import { Check, Edit2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { X } from 'lucide-react';
 import clsx from 'clsx';
-import html2canvas from 'html2canvas';
+import html2canvas from 'html2canvas-pro';
 import jsPDF from 'jspdf';
 import { Download } from 'lucide-react';
 import { useRef } from 'react';
