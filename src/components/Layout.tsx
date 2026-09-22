@@ -1,6 +1,6 @@
 import React, { ReactNode, useState, useEffect } from 'react';
 import { useAuth } from './AuthProvider';
-import { LogOut, LayoutDashboard, Building2, Users, FileText, Activity, UserSquare, Sun, Moon, BellRing } from 'lucide-react';
+import { LogOut, LayoutDashboard, Building2, Users, FileText, Activity, UserSquare, Sun, Moon, BellRing, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import clsx from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -30,6 +30,14 @@ export function Layout({ children }: { children: ReactNode }) {
     return localStorage.getItem('theme') === 'light';
   });
 
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    return localStorage.getItem('sidebar_collapsed') === 'true';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('sidebar_collapsed', String(isSidebarCollapsed));
+  }, [isSidebarCollapsed]);
+
   useEffect(() => {
     if (isLightMode) {
       document.documentElement.classList.add('light');
@@ -58,58 +66,107 @@ export function Layout({ children }: { children: ReactNode }) {
       </div>
 
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex w-64 bg-[#0a192f] border-r border-[#1e345e] shadow-2xl flex-col z-40 transition-all relative">
-        <div className="h-20 flex items-center px-6 border-b border-[#1e345e]">
+      <aside className={clsx(
+        "hidden md:flex bg-[#0a192f] border-r border-[#1e345e] shadow-2xl flex-col z-40 transition-all duration-300 relative",
+        isSidebarCollapsed ? "w-20" : "w-64"
+      )}>
+        <button
+          onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          title={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className="absolute -right-3 top-24 w-6 h-6 rounded-full bg-[#112240] border border-[#1e345e] flex items-center justify-center text-slate-400 hover:text-emerald-400 hover:border-emerald-500/50 transition-colors z-50 shadow-lg"
+        >
+          {isSidebarCollapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
+        </button>
+
+        <div className={clsx("h-20 flex items-center border-b border-[#1e345e]", isSidebarCollapsed ? "justify-center px-2" : "px-6")}>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center border border-emerald-500/50">
+            <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center border border-emerald-500/50 shrink-0">
               <Activity className="text-emerald-400 w-6 h-6" />
             </div>
-            <span className="text-xl font-bold tracking-tight text-white">CashUp Pro</span>
+            {!isSidebarCollapsed && <span className="text-xl font-bold tracking-tight text-white whitespace-nowrap">CashUp Pro</span>}
           </div>
         </div>
 
         <nav className="flex-1 px-4 py-8 flex flex-col gap-2 overflow-y-auto">
-          <Link 
-            to="/" 
-            className="flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 hover:bg-[#112240] hover:text-emerald-400 text-emerald-400 bg-[#112240]/50 border border-emerald-500/20 shadow-[0_0_15px_rgba(52,211,153,0.05)]"
+          <Link
+            to="/"
+            title={isSidebarCollapsed ? "Dashboard" : undefined}
+            className={clsx(
+              "flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300 hover:bg-[#112240] hover:text-emerald-400 text-emerald-400 bg-[#112240]/50 border border-emerald-500/20 shadow-[0_0_15px_rgba(52,211,153,0.05)]",
+              isSidebarCollapsed && "justify-center px-0"
+            )}
           >
-            <LayoutDashboard className="w-5 h-5" />
-            <span className="font-medium">Dashboard</span>
+            <LayoutDashboard className="w-5 h-5 shrink-0" />
+            {!isSidebarCollapsed && <span className="font-medium">Dashboard</span>}
           </Link>
-          
+
           {['ADMIN', 'ACCOUNTANT', 'HEAD_ACCOUNTANT', 'DIRECTOR', 'AUDITOR'].includes(user.role) && (
             <>
-              <div className="mt-6 mb-2 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">System</div>
+              {!isSidebarCollapsed && <div className="mt-6 mb-2 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">System</div>}
+              {isSidebarCollapsed && <div className="mt-6 border-t border-[#1e345e]" />}
               {(user.role === 'ADMIN' || user.role === 'SUPERVISOR' || user.role === 'AUDITOR') && (
-                <Link to="/users" className="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:bg-[#112240] hover:text-emerald-400 transition-colors">
-                  <Users className="w-5 h-5" />
-                  <span className="font-medium">Users</span>
+                <Link
+                  to="/users"
+                  title={isSidebarCollapsed ? "Users" : undefined}
+                  className={clsx(
+                    "flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:bg-[#112240] hover:text-emerald-400 transition-colors",
+                    isSidebarCollapsed && "justify-center px-0"
+                  )}
+                >
+                  <Users className="w-5 h-5 shrink-0" />
+                  {!isSidebarCollapsed && <span className="font-medium">Users</span>}
                 </Link>
               )}
-              <Link to="/branches" className="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:bg-[#112240] hover:text-emerald-400 transition-colors">
-                <Building2 className="w-5 h-5" />
-                <span className="font-medium">Branches</span>
+              <Link
+                to="/branches"
+                title={isSidebarCollapsed ? "Branches" : undefined}
+                className={clsx(
+                  "flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:bg-[#112240] hover:text-emerald-400 transition-colors",
+                  isSidebarCollapsed && "justify-center px-0"
+                )}
+              >
+                <Building2 className="w-5 h-5 shrink-0" />
+                {!isSidebarCollapsed && <span className="font-medium">Branches</span>}
               </Link>
-              <Link to="/till-operators" className="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:bg-[#112240] hover:text-emerald-400 transition-colors">
-                <UserSquare className="w-5 h-5" />
-                <span className="font-medium">Till Operators</span>
+              <Link
+                to="/till-operators"
+                title={isSidebarCollapsed ? "Till Operators" : undefined}
+                className={clsx(
+                  "flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:bg-[#112240] hover:text-emerald-400 transition-colors",
+                  isSidebarCollapsed && "justify-center px-0"
+                )}
+              >
+                <UserSquare className="w-5 h-5 shrink-0" />
+                {!isSidebarCollapsed && <span className="font-medium">Till Operators</span>}
               </Link>
             </>
           )}
 
           <div className="mt-auto pt-6 border-t border-[#1e345e]">
-             <div className="px-4 mb-4">
-               <div className="text-sm font-medium text-white">{user.name}</div>
-               <div className="text-xs text-emerald-400 capitalize">{user.role.toLowerCase()}</div>
-             </div>
-             
+             {isSidebarCollapsed ? (
+               <div className="flex justify-center mb-4" title={`${user.name} (${user.role.toLowerCase()})`}>
+                 <div className="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/50 flex items-center justify-center text-emerald-400 text-sm font-bold">
+                   {(user.name || "").charAt(0).toUpperCase()}
+                 </div>
+               </div>
+             ) : (
+               <div className="px-4 mb-4">
+                 <div className="text-sm font-medium text-white">{user.name}</div>
+                 <div className="text-xs text-emerald-400 capitalize">{user.role.toLowerCase()}</div>
+               </div>
+             )}
+
              <button
                onClick={() => setShowUpdates(true)}
-               className="w-full flex items-center justify-between px-4 py-3 rounded-lg text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 transition-colors mb-2 border border-amber-500/20"
+               title={isSidebarCollapsed ? "What's New" : undefined}
+               className={clsx(
+                 "w-full flex items-center px-4 py-3 rounded-lg text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 transition-colors mb-2 border border-amber-500/20",
+                 isSidebarCollapsed ? "justify-center px-0" : "justify-between"
+               )}
              >
                <div className="flex items-center gap-3">
-                 <BellRing className="w-5 h-5" />
-                 <span className="font-medium">What's New</span>
+                 <BellRing className="w-5 h-5 shrink-0" />
+                 {!isSidebarCollapsed && <span className="font-medium">What's New</span>}
                </div>
                <span className="flex h-2 w-2 relative">
                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
@@ -118,18 +175,26 @@ export function Layout({ children }: { children: ReactNode }) {
              </button>
              <button
                onClick={() => setIsLightMode(!isLightMode)}
-               className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-[#112240] transition-colors mb-2"
+               title={isSidebarCollapsed ? (isLightMode ? 'Dark Mode' : 'Light Mode') : undefined}
+               className={clsx(
+                 "w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-[#112240] transition-colors mb-2",
+                 isSidebarCollapsed && "justify-center px-0"
+               )}
              >
-               {isLightMode ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
-               <span className="font-medium">{isLightMode ? 'Dark Mode' : 'Light Mode'}</span>
+               {isLightMode ? <Moon className="w-5 h-5 shrink-0" /> : <Sun className="w-5 h-5 shrink-0" />}
+               {!isSidebarCollapsed && <span className="font-medium">{isLightMode ? 'Dark Mode' : 'Light Mode'}</span>}
              </button>
 
              <button
                onClick={logout}
-               className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+               title={isSidebarCollapsed ? "Sign Out" : undefined}
+               className={clsx(
+                 "w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors",
+                 isSidebarCollapsed && "justify-center px-0"
+               )}
              >
-               <LogOut className="w-5 h-5" />
-               <span className="font-medium">Sign Out</span>
+               <LogOut className="w-5 h-5 shrink-0" />
+               {!isSidebarCollapsed && <span className="font-medium">Sign Out</span>}
              </button>
           </div>
         </nav>
