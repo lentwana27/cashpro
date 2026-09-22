@@ -277,6 +277,11 @@ export function AccountantDashboard() {
                           Approve Amendment
                         </button>
                       )}
+                      {r.status === 'AMENDMENT_REQUESTED' && r.accountantAmendmentApproval && (
+                        <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded text-xs font-bold">
+                          Approved &middot; awaiting Auditor
+                        </span>
+                      )}
                     </td>
                   </tr>
                   

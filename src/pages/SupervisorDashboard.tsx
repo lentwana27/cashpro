@@ -420,8 +420,20 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
               Edit Submission
             </button>
           ) : submitted.status === "AMENDMENT_REQUESTED" ? (
-            <div className="px-6 py-2 bg-slate-800 text-slate-400 border border-[#1e345e] rounded-lg font-medium inline-block mx-auto">
-              Amendment Requested (Waiting for Approval)
+            <div className="px-6 py-3 bg-slate-800 border border-[#1e345e] rounded-lg inline-block mx-auto text-left">
+              <div className="font-medium text-slate-300 mb-2">Amendment Requested</div>
+              <div className="flex items-center gap-2 text-sm mb-1">
+                <span className={clsx("w-2 h-2 rounded-full", submitted.accountantAmendmentApproval ? "bg-emerald-500" : "bg-slate-600")} />
+                <span className={submitted.accountantAmendmentApproval ? "text-emerald-400" : "text-slate-500"}>
+                  Accountant {submitted.accountantAmendmentApproval ? "approved" : "pending"}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <span className={clsx("w-2 h-2 rounded-full", submitted.auditorAmendmentApproval ? "bg-emerald-500" : "bg-slate-600")} />
+                <span className={submitted.auditorAmendmentApproval ? "text-emerald-400" : "text-slate-500"}>
+                  Auditor {submitted.auditorAmendmentApproval ? "approved" : "pending"}
+                </span>
+              </div>
             </div>
           ) : (
             <button

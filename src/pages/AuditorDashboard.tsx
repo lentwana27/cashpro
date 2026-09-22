@@ -202,12 +202,17 @@ export function AuditorDashboard() {
                         </div>
                       )}
                       {r.status === 'AMENDMENT_REQUESTED' && !r.auditorAmendmentApproval && (
-                        <button 
+                        <button
                            onClick={(e) => { e.stopPropagation(); updateStatus(r.id, 'AMENDMENT_APPROVED', r)  }}
                           className="px-3 py-1.5 ml-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-400 rounded transition-colors text-xs font-bold"
                         >
                           Approve Amendment
                         </button>
+                      )}
+                      {r.status === 'AMENDMENT_REQUESTED' && r.auditorAmendmentApproval && (
+                        <span className="px-3 py-1.5 ml-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded text-xs font-bold">
+                          Approved &middot; awaiting Accountant
+                        </span>
                       )}
                     </td>
                   </tr>
