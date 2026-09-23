@@ -43,7 +43,7 @@ const getCashierName = (item: any, tillVariances?: any[]): string | null => {
   return null;
 };
 
-const BreakdownSection = ({ title, items, tillVariances }: { title: string, items: any, tillVariances?: any[] }) => {
+const BreakdownSection = ({ title, items, tillVariances, footer }: { title: string, items: any, tillVariances?: any[], footer?: { label: string, value: number } }) => {
   const arr = Array.isArray(items) ? items : items ? [items] : [];
   if (arr.length === 0) return null;
   const total = arr.reduce((a:number,b:any)=>a+(b.usdEquivalent||0), 0);
@@ -71,6 +71,12 @@ const BreakdownSection = ({ title, items, tillVariances }: { title: string, item
           );
         })}
       </div>
+      {footer && (
+        <div className="flex justify-between text-xs font-bold mt-2 pt-2 border-t border-[#1e345e]">
+          <span className="text-slate-300">{footer.label}</span>
+          <span className="text-emerald-400 font-mono">{money(footer.value)}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -349,13 +355,14 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
           <div>
             <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-[#1e345e] pb-2">Income breakdown</h4>
             <div className="space-y-4">
-              <BreakdownSection title="Total Sales" items={localRecon.totalSales} tillVariances={localRecon.tillVariances} />
+              <BreakdownSection
+                title="Total Sales"
+                items={localRecon.totalSales}
+                tillVariances={localRecon.tillVariances}
+                footer={{ label: 'Expected (Income − Deductions)', value: totals.expectedCashUsd }}
+              />
               <BreakdownSection title="Deposits Received" items={localRecon.depositsReceived} />
               <BreakdownSection title="Manual Sales Not Captured Today" items={localRecon.manualSalesToday} />
-              <div className="flex justify-between items-center pt-3 border-t border-[#1e345e] text-sm">
-                <span className="font-bold text-slate-300">Expected Cash <span className="font-normal text-slate-500">(Income − Deductions)</span></span>
-                <span className="font-mono font-bold text-emerald-400">{money(totals.expectedCashUsd)}</span>
-              </div>
             </div>
           </div>
           <div>
