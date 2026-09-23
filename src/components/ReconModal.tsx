@@ -13,6 +13,27 @@ import { Download } from 'lucide-react';
 
 const money = (n: any) => `$${(Number(n) || 0).toFixed(2)}`;
 
+const sumUsd = (val: any): number => {
+  if (!val) return 0;
+  if (Array.isArray(val)) return val.reduce((a: number, b: any) => a + (b.usdEquivalent || 0), 0);
+  return val.usdEquivalent || 0;
+};
+
+// Expected Cash and Variance are always derived here from the underlying line
+// items - never read from the recon's own stored expectedCashUsd/varianceUsd
+// fields - so the numbers shown are guaranteed to satisfy
+// Income - Deductions = Expected Cash, and Physical Cash - Expected Cash = Variance,
+// regardless of any bug in whichever screen last wrote those stored fields.
+const computeTotals = (recon: any) => {
+  const totalIncome = sumUsd(recon.totalSales) + sumUsd(recon.depositsReceived) + sumUsd(recon.manualSalesToday);
+  const totalDeductions = sumUsd(recon.debtors) + sumUsd(recon.depositClaims) + sumUsd(recon.returnsRefunds) +
+    sumUsd(recon.expenses) + sumUsd(recon.purchases) + sumUsd(recon.manualSalesPrevious);
+  const expectedCashUsd = totalIncome - totalDeductions;
+  const physicalCashUsd = sumUsd(recon.tillCashBreakdown) || sumUsd(recon.endOfDayCash);
+  const varianceUsd = physicalCashUsd - expectedCashUsd;
+  return { totalIncome, totalDeductions, expectedCashUsd, physicalCashUsd, varianceUsd };
+};
+
 const getCashierName = (item: any, tillVariances?: any[]): string | null => {
   if (item.cashierName && item.cashierName !== 'Unknown') return item.cashierName;
   if (tillVariances) {
@@ -104,7 +125,8 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
       doc.setFont('helvetica', 'bold');
       doc.text('Summary', marginX, y);
       y += 4;
-      const varianceUsd = localRecon.varianceUsd || 0;
+      const totals = computeTotals(localRecon);
+      const varianceUsd = totals.varianceUsd;
       const varianceColor: [number, number, number] = varianceUsd > 0 ? [16, 185, 129] : varianceUsd < 0 ? [244, 63, 94] : [59, 130, 246];
       autoTable(doc, {
         startY: y,
@@ -112,14 +134,16 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
         theme: 'grid',
         styles: { fontSize: 9, cellPadding: 3, halign: 'center' },
         headStyles: { fillColor: [17, 34, 64] },
-        head: [['Expected Cash (USD)', 'Physical Cash Counted (USD)', 'Variance (USD)']],
+        head: [['Total Income (USD)', 'Total Deductions (USD)', 'Expected Cash (USD)', 'Physical Cash Counted (USD)', 'Variance (USD)']],
         body: [[
-          money(localRecon.expectedCashUsd),
-          money(localRecon.endOfDayCash?.usdEquivalent),
+          money(totals.totalIncome),
+          money(totals.totalDeductions),
+          money(totals.expectedCashUsd),
+          money(totals.physicalCashUsd),
           `${varianceUsd > 0 ? '+' : ''}${money(varianceUsd)}`,
         ]],
         didParseCell: (data: any) => {
-          if (data.section === 'body' && data.column.index === 2) {
+          if (data.section === 'body' && data.column.index === 4) {
             data.cell.styles.textColor = varianceColor;
             data.cell.styles.fontStyle = 'bold';
           }
@@ -298,6 +322,7 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
   };
 
   if (!localRecon) return null;
+  const totals = computeTotals(localRecon);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm overflow-hidden">
   <div className="bg-[#0a192f] border border-[#1e345e] rounded-2xl w-full max-w-5xl max-h-full shadow-2xl overflow-y-auto flex flex-col relative">
@@ -327,6 +352,10 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
               <BreakdownSection title="Total Sales" items={localRecon.totalSales} tillVariances={localRecon.tillVariances} />
               <BreakdownSection title="Deposits Received" items={localRecon.depositsReceived} />
               <BreakdownSection title="Manual Sales Not Captured Today" items={localRecon.manualSalesToday} />
+              <div className="flex justify-between items-center pt-3 border-t border-[#1e345e] text-sm">
+                <span className="font-bold text-slate-300">Expected Cash <span className="font-normal text-slate-500">(Income − Deductions)</span></span>
+                <span className="font-mono font-bold text-emerald-400">{money(totals.expectedCashUsd)}</span>
+              </div>
             </div>
           </div>
           <div>
@@ -422,19 +451,27 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
         )}
 
         <div className="p-6 bg-[#0a192f] border-t border-[#1e345e]">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 font-mono">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-6 font-mono">
+            <div>
+              <div className="text-slate-500 mb-1 text-xs uppercase tracking-wider">Total Income</div>
+              <div className="text-slate-300 text-lg">{money(totals.totalIncome)}</div>
+            </div>
+            <div>
+              <div className="text-slate-500 mb-1 text-xs uppercase tracking-wider">Total Deductions</div>
+              <div className="text-slate-300 text-lg">{money(totals.totalDeductions)}</div>
+            </div>
             <div>
               <div className="text-slate-500 mb-1 text-xs uppercase tracking-wider">Expected Cash</div>
-              <div className="text-slate-300 text-lg">${(localRecon.expectedCashUsd || 0).toFixed(2)}</div>
+              <div className="text-slate-300 text-lg">{money(totals.expectedCashUsd)}</div>
             </div>
             <div>
               <div className="text-slate-500 mb-1 text-xs uppercase tracking-wider">Physical Cash Count</div>
-              <div className="text-white font-bold text-lg">${(localRecon.endOfDayCash?.usdEquivalent || 0).toFixed(2)}</div>
+              <div className="text-white font-bold text-lg">{money(totals.physicalCashUsd)}</div>
             </div>
             <div>
               <div className="text-slate-500 mb-1 text-xs uppercase tracking-wider">Variance</div>
-              <div className={clsx("font-bold text-lg", localRecon.varianceUsd > 0 ? "text-emerald-400" : localRecon.varianceUsd < 0 ? "text-rose-400" : "text-blue-400")}>
-                {localRecon.varianceUsd > 0 ? '+' : ''}{(localRecon.varianceUsd || 0).toFixed(2)}
+              <div className={clsx("font-bold text-lg", totals.varianceUsd > 0 ? "text-emerald-400" : totals.varianceUsd < 0 ? "text-rose-400" : "text-blue-400")}>
+                {totals.varianceUsd > 0 ? '+' : ''}{money(totals.varianceUsd)}
               </div>
             </div>
           </div>

@@ -327,18 +327,19 @@ function InputSalesModal({ currentUser, reconciliation, rates, onClose, onUpdate
     }
     setLoading(true);
     try {
+      const sumUsd = (val: any): number => {
+        if (!val) return 0;
+        if (Array.isArray(val)) return val.reduce((a: number, b: any) => a + (b.usdEquivalent || 0), 0);
+        return val.usdEquivalent || 0;
+      };
+
       const totalSalesUsd = salesItems.reduce((acc, curr) => acc + (curr.usdEquivalent || 0), 0);
-      
-      const tDeductions = (Array.isArray(reconciliation.debtors) ? reconciliation.debtors.reduce((a:number,b:any)=>a+(b.usdEquivalent||0),0) : reconciliation.debtors?.usdEquivalent || 0) +
-                          (Array.isArray(reconciliation.depositClaims) ? reconciliation.depositClaims.reduce((a:number,b:any)=>a+(b.usdEquivalent||0),0) : reconciliation.depositClaims?.usdEquivalent || 0) +
-                          (Array.isArray(reconciliation.returnsRefunds) ? reconciliation.returnsRefunds.reduce((a:number,b:any)=>a+(b.usdEquivalent||0),0) : reconciliation.returnsRefunds?.usdEquivalent || 0) +
-                          (Array.isArray(reconciliation.expenses) ? reconciliation.expenses.reduce((a:number,b:any)=>a+(b.usdEquivalent||0),0) : reconciliation.expenses?.usdEquivalent || 0) +
-                          (Array.isArray(reconciliation.purchases) ? reconciliation.purchases.reduce((a:number,b:any)=>a+(b.usdEquivalent||0),0) : reconciliation.purchases?.usdEquivalent || 0);
+      const totalIncome = totalSalesUsd + sumUsd(reconciliation.depositsReceived) + sumUsd(reconciliation.manualSalesToday);
+      const tDeductions = sumUsd(reconciliation.debtors) + sumUsd(reconciliation.depositClaims) + sumUsd(reconciliation.returnsRefunds) +
+                          sumUsd(reconciliation.expenses) + sumUsd(reconciliation.purchases) + sumUsd(reconciliation.manualSalesPrevious);
 
-      const totalDeposits = Array.isArray(reconciliation.depositsReceived) ? reconciliation.depositsReceived.reduce((a:number,b:any)=>a+(b.usdEquivalent||0),0) : reconciliation.depositsReceived?.usdEquivalent || 0;
-
-      const expected = totalSalesUsd + totalDeposits - tDeductions;
-      const actCash = reconciliation.endOfDayCash.usdEquivalent || 0;
+      const expected = totalIncome - tDeductions;
+      const actCash = reconciliation.endOfDayCash?.usdEquivalent || 0;
       const variance = actCash - expected;
 
       await api.put(`/reconciliations/${reconciliation.id}`, { 
