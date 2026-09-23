@@ -402,10 +402,20 @@ function InputSalesModal({ currentUser, reconciliation, rates, onClose, onUpdate
       const actCash = reconciliation.endOfDayCash?.usdEquivalent || 0;
       const variance = actCash - expected;
 
-      await api.put(`/reconciliations/${reconciliation.id}`, { 
+      // Each till's own expected figure (and variance) is derived from its
+      // matching entry here too, otherwise it's left stuck at whatever it was
+      // at initial submission (usually 0) even after real sales are entered.
+      const updatedTillVariances = (reconciliation.tillVariances || []).map((tv: any) => {
+        const matchingSale = salesItems.find((s: any) => s.description === tv.tillName);
+        const tillExpected = matchingSale ? (matchingSale.usdEquivalent || 0) : (tv.expected || 0);
+        return { ...tv, expected: tillExpected, variance: (tv.actual || 0) - tillExpected };
+      });
+
+      await api.put(`/reconciliations/${reconciliation.id}`, {
         totalSales: salesItems,
         expectedCashUsd: expected,
         varianceUsd: variance,
+        tillVariances: updatedTillVariances,
         ...(confirmEntry ? { salesConfirmed: true } : {}),
         salesInputtedBy: currentUser?.id,
         salesInputtedByName: currentUser?.name,

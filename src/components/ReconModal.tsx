@@ -34,6 +34,23 @@ const computeTotals = (recon: any) => {
   return { totalIncome, totalDeductions, expectedCashUsd, physicalCashUsd, varianceUsd };
 };
 
+// tillVariances[].expected is set once at submission time and is never
+// recomputed when the "Enter System Sales" step later updates totalSales -
+// so it's stale (usually stuck at 0) on almost every reconciliation that went
+// through that step. Re-derive each till's expected figure from the current
+// totalSales entry for that till (matched by name) instead of trusting the
+// stored value, and recompute variance from that corrected expected.
+const deriveTillVariances = (recon: any): any[] => {
+  const tillVariances = recon.tillVariances || [];
+  const totalSalesArr = Array.isArray(recon.totalSales) ? recon.totalSales : recon.totalSales ? [recon.totalSales] : [];
+  return tillVariances.map((tv: any) => {
+    const matchingSale = totalSalesArr.find((s: any) => s.description === tv.tillName);
+    const expected = matchingSale ? (matchingSale.usdEquivalent || 0) : (tv.expected || 0);
+    const actual = tv.actual || 0;
+    return { ...tv, expected, variance: actual - expected };
+  });
+};
+
 const getCashierName = (item: any, tillVariances?: any[]): string | null => {
   if (item.cashierName && item.cashierName !== 'Unknown') return item.cashierName;
   if (tillVariances) {
@@ -213,7 +230,8 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
         { label: 'Manual Sales (Previous Days)', items: localRecon.manualSalesPrevious },
       ]);
 
-      if (localRecon.tillVariances && localRecon.tillVariances.length > 0) {
+      const pdfTillVariances = deriveTillVariances(localRecon);
+      if (pdfTillVariances.length > 0) {
         ensureSpace(20);
         doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
@@ -226,7 +244,7 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
           styles: { fontSize: 8, cellPadding: 2.5 },
           headStyles: { fillColor: [17, 34, 64] },
           head: [['Till', 'Cashier', 'Expected (USD)', 'Actual (USD)', 'Variance (USD)', 'Note']],
-          body: localRecon.tillVariances.map((tv: any) => [
+          body: pdfTillVariances.map((tv: any) => [
             tv.tillName,
             tv.cashierName && tv.cashierName !== 'Unknown' ? tv.cashierName : 'Not identified',
             money(tv.expected),
@@ -236,7 +254,7 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
           ]),
           didParseCell: (data: any) => {
             if (data.section === 'body' && data.column.index === 4) {
-              const v = localRecon.tillVariances[data.row.index]?.variance || 0;
+              const v = pdfTillVariances[data.row.index]?.variance || 0;
               data.cell.styles.textColor = v > 0 ? [16, 185, 129] : v < 0 ? [244, 63, 94] : [59, 130, 246];
               data.cell.styles.fontStyle = 'bold';
             }
@@ -329,6 +347,7 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
 
   if (!localRecon) return null;
   const totals = computeTotals(localRecon);
+  const derivedTillVariances = deriveTillVariances(localRecon);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm overflow-hidden">
   <div className="bg-[#0a192f] border border-[#1e345e] rounded-2xl w-full max-w-5xl max-h-full shadow-2xl overflow-y-auto flex flex-col relative">
@@ -379,11 +398,11 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
         </div>
         
         
-        {localRecon.tillVariances && localRecon.tillVariances.length > 0 && (
+        {derivedTillVariances.length > 0 && (
           <div className="px-6 pb-6 bg-[#061121]">
             <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-[#1e345e] pb-2">Till Variances</h4>
             <div className="space-y-4">
-              {localRecon.tillVariances.map((tv: any, idx: number) => (
+              {derivedTillVariances.map((tv: any, idx: number) => (
                 <div key={idx} className="bg-[#112240] border border-[#1e345e] rounded-lg p-4">
                   <div className="flex justify-between items-start mb-2">
                     <div>
