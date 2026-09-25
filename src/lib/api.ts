@@ -20,10 +20,11 @@ const getHeaders = () => {
 };
 
 export const api = {
-  async delete(endpoint: string) {
+  async delete(endpoint: string, body?: any) {
     const res = await fetch(`${API_BASE}${endpoint}`, {
       method: 'DELETE',
       headers: getHeaders(),
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
     
     if (!res.ok) {

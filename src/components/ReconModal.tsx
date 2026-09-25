@@ -106,6 +106,8 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteReason, setDeleteReason] = useState('');
   const [branches, setBranches] = useState<any[]>([]);
 
   useEffect(() => {
@@ -113,10 +115,10 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
   }, []);
 
   const handleDelete = async () => {
-    if (!confirm(`Delete this reconciliation for ${safeFormat(localRecon.date || new Date(), 'MMMM dd, yyyy')}? This cannot be undone.`)) return;
+    if (!deleteReason.trim()) return;
     setDeleting(true);
     try {
-      await api.delete(`/reconciliations/${localRecon.id}`);
+      await api.delete(`/reconciliations/${localRecon.id}`, { reason: deleteReason.trim() });
       onClose();
     } catch (err) {
       console.error(err);
@@ -372,7 +374,7 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
           {downloading ? "Exporting..." : "Download PDF"}
         </button>
         {user?.role === 'ADMIN' && (
-          <button onClick={handleDelete} disabled={deleting} className="flex items-center gap-2 text-rose-400 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 p-2 px-3 rounded-lg transition-colors border border-rose-500/20 text-sm font-bold disabled:opacity-50">
+          <button onClick={() => setShowDeleteConfirm(true)} disabled={deleting} className="flex items-center gap-2 text-rose-400 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 p-2 px-3 rounded-lg transition-colors border border-rose-500/20 text-sm font-bold disabled:opacity-50">
             <Trash2 className="w-4 h-4" />
             {deleting ? "Deleting..." : "Delete"}
           </button>
@@ -553,6 +555,46 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
         )}
       </div>
     </div>
+    {showDeleteConfirm && (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70">
+        <div className="bg-[#0a192f] border border-rose-500/30 rounded-2xl w-full max-w-md shadow-2xl p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-full bg-rose-500/10 border border-rose-500/30 flex items-center justify-center shrink-0">
+              <Trash2 className="w-5 h-5 text-rose-400" />
+            </div>
+            <h3 className="text-lg font-bold text-white">Delete Reconciliation</h3>
+          </div>
+          <p className="text-sm text-slate-400 mb-4">
+            You're about to permanently delete the reconciliation for{" "}
+            <span className="text-white font-medium">{safeFormat(localRecon.date || new Date(), "MMMM dd, yyyy")}</span>.
+            This cannot be undone. Please state a reason for this deletion - it will be recorded in the audit log.
+          </p>
+          <textarea
+            autoFocus
+            value={deleteReason}
+            onChange={(e) => setDeleteReason(e.target.value)}
+            placeholder="Reason for deletion (required)..."
+            rows={3}
+            className="w-full bg-[#061121] border border-[#1e345e] text-white text-sm p-3 rounded-lg focus:outline-none focus:border-rose-500 mb-4 resize-none"
+          />
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={() => { setShowDeleteConfirm(false); setDeleteReason(''); }}
+              className="px-4 py-2 text-slate-400 hover:text-white transition-colors text-sm font-medium"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={deleting || !deleteReason.trim()}
+              className="px-4 py-2 bg-rose-500 hover:bg-rose-600 disabled:opacity-50 disabled:hover:bg-rose-500 text-white rounded-lg transition-colors text-sm font-bold"
+            >
+              {deleting ? "Deleting..." : "Delete Permanently"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
   </div>
   );
 }

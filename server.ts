@@ -333,10 +333,14 @@ api.delete('/reconciliations/branch/:branchId', async (req, res) => {
 
 api.delete('/reconciliations/:id', requireRole('ADMIN'), async (req, res) => {
   try {
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+    if (!reason) {
+      return res.status(400).json({ error: 'A reason for deletion is required' });
+    }
     const uid = req.headers['x-user-id'] as string;
     const uname = req.headers['x-user-name'] as string;
     if (uid && uname) {
-      logAction(uid, uname, 'DELETE RECONCILIATION', `Deleted reconciliation ${req.params.id}`);
+      logAction(uid, uname, 'DELETE RECONCILIATION', `Deleted reconciliation ${req.params.id}. Reason: ${reason}`);
     }
     await db.delete(schema.reconciliations).where(eq(schema.reconciliations.id, req.params.id));
     res.json({ success: true });
