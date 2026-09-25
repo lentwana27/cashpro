@@ -331,6 +331,20 @@ api.delete('/reconciliations/branch/:branchId', async (req, res) => {
   }
 });
 
+api.delete('/reconciliations/:id', requireRole('ADMIN'), async (req, res) => {
+  try {
+    const uid = req.headers['x-user-id'] as string;
+    const uname = req.headers['x-user-name'] as string;
+    if (uid && uname) {
+      logAction(uid, uname, 'DELETE RECONCILIATION', `Deleted reconciliation ${req.params.id}`);
+    }
+    await db.delete(schema.reconciliations).where(eq(schema.reconciliations.id, req.params.id));
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 api.get('/reconciliations', async (req, res) => {
   const recs = await db.select().from(schema.reconciliations).orderBy(desc(schema.reconciliations.createdAt));
   res.json(recs);

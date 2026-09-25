@@ -9,7 +9,7 @@ import { X } from 'lucide-react';
 import clsx from 'clsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Download } from 'lucide-react';
+import { Download, Trash2 } from 'lucide-react';
 
 const money = (n: any) => `$${(Number(n) || 0).toFixed(2)}`;
 
@@ -105,11 +105,26 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
   const [noteInput, setNoteInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [branches, setBranches] = useState<any[]>([]);
 
   useEffect(() => {
     api.get('/branches').then(setBranches).catch(() => {});
   }, []);
+
+  const handleDelete = async () => {
+    if (!confirm(`Delete this reconciliation for ${safeFormat(localRecon.date || new Date(), 'MMMM dd, yyyy')}? This cannot be undone.`)) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/reconciliations/${localRecon.id}`);
+      onClose();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to delete reconciliation. Check console for details.');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const downloadPdf = () => {
     try {
@@ -356,12 +371,18 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
           <Download className="w-4 h-4" />
           {downloading ? "Exporting..." : "Download PDF"}
         </button>
+        {user?.role === 'ADMIN' && (
+          <button onClick={handleDelete} disabled={deleting} className="flex items-center gap-2 text-rose-400 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 p-2 px-3 rounded-lg transition-colors border border-rose-500/20 text-sm font-bold disabled:opacity-50">
+            <Trash2 className="w-4 h-4" />
+            {deleting ? "Deleting..." : "Delete"}
+          </button>
+        )}
         <button onClick={onClose} className="text-slate-500 hover:text-white bg-[#112240] p-2 rounded-lg transition-colors shadow-lg">
           <X className="w-5 h-5" />
         </button>
     </div>
     <div className="bg-[#0a192f] flex-1 flex flex-col">
-      <div className="p-6 border-b border-[#1e345e] flex justify-between items-center bg-[#0a192f] z-10 pr-48">
+      <div className="p-6 border-b border-[#1e345e] flex justify-between items-center bg-[#0a192f] z-10 pr-72">
         <div>
           <h2 className="text-xl font-bold text-white">Reconciliation Details</h2>
           <p className="text-sm text-slate-400 mt-1">
