@@ -13,6 +13,7 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { ReconModal } from '../components/ReconModal';
+import { AmendmentStagePills, isAmendmentStatus } from '../components/AmendmentStagePills';
 
 export function DirectorDashboard() {
   const [reconciliations, setReconciliations] = useState<DailyReconciliation[]>([]);
@@ -26,23 +27,34 @@ export function DirectorDashboard() {
   const [showExportModal, setShowExportModal] = useState(false);
   const tableRef = React.useRef<HTMLDivElement>(null);
   
-  useEffect(() => {
-    const load = async () => {
-      try {
-         const [recs, brs] = await Promise.all([
-           api.get('/reconciliations'),
-           api.get('/branches')
-         ]);
-         setReconciliations(recs);
-         setBranches(brs);
-      } catch (e) {
-         // Ignore network errors during polling
-      }
-    };
-    load();
-    const interval = setInterval(load, 5000);
-    return () => clearInterval(interval);
+  const loadData = React.useCallback(async () => {
+    try {
+       const [recs, brs] = await Promise.all([
+         api.get('/reconciliations'),
+         api.get('/branches')
+       ]);
+       setReconciliations(recs);
+       setBranches(brs);
+    } catch (e) {
+       // Ignore network errors during polling
+    }
   }, []);
+
+  useEffect(() => {
+    loadData();
+    const interval = setInterval(loadData, 5000);
+    return () => clearInterval(interval);
+  }, [loadData]);
+
+  const approveAmendment = async (id: string) => {
+    try {
+      await api.put(`/reconciliations/${id}/amendment-approve`, {});
+    } catch (e) {
+      console.error(e);
+      alert('Failed to approve amendment. It may have already moved to the next stage.');
+    }
+    loadData();
+  };
 
   const missingReconciliations = React.useMemo(() => {
     const missing: { branchName: string; date: string }[] = [];
@@ -375,6 +387,7 @@ export function DirectorDashboard() {
                   <th className="px-4 py-3 text-right font-medium">Total Sales (USD)</th>
                   <th className="px-4 py-3 text-right font-medium">Variance (USD)</th>
                   <th className="px-4 py-3 text-center font-medium">Status</th>
+                  <th className="px-4 py-3 text-right font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#1e345e]">
@@ -389,20 +402,34 @@ export function DirectorDashboard() {
                       <td className="px-4 py-3 font-medium text-white">{(branches || []).find(b => b.id === r.branchId)?.name || r.branchId}</td>
                       <td className="px-4 py-3 text-slate-300">{safeFormat(r.date || new Date(), 'MMM d, yyyy')}</td>
                       <td className="px-4 py-3 text-right font-mono">${(Array.isArray(r.totalSales) ? r.totalSales.reduce((a,b)=>a+(b.usdEquivalent||0),0) : (r.totalSales?.usdEquivalent || 0)).toFixed(2)}</td>
-                      <td className={clsx("px-4 py-3 text-right font-mono font-bold", 
+                      <td className={clsx("px-4 py-3 text-right font-mono font-bold",
                         (r.varianceUsd || 0) > 0 ? "text-emerald-400" :
                         (r.varianceUsd || 0) < 0 ? "text-rose-400" : "text-blue-400"
                       )}>
                         {(r.varianceUsd || 0) > 0 ? '+' : ''}{(r.varianceUsd || 0).toFixed(2)}
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <span className={clsx("px-2 py-1 rounded text-xs font-semibold", 
-                          r.status === 'APPROVED' ? "bg-emerald-500/20 text-emerald-400" :
-                          r.status === 'FLAGGED' ? "bg-rose-500/20 text-rose-400" :
-                          "bg-amber-500/20 text-amber-400"
-                        )}>
-                          {r.status}
-                        </span>
+                        {isAmendmentStatus(r.status) ? (
+                          <AmendmentStagePills status={r.status} className="justify-center" />
+                        ) : (
+                          <span className={clsx("px-2 py-1 rounded text-xs font-semibold",
+                            r.status === 'APPROVED' ? "bg-emerald-500/20 text-emerald-400" :
+                            r.status === 'FLAGGED' ? "bg-rose-500/20 text-rose-400" :
+                            "bg-amber-500/20 text-amber-400"
+                          )}>
+                            {r.status}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {r.status === 'AMENDMENT_PENDING_DIRECTOR' && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); approveAmendment(r.id); }}
+                            className="px-3 py-1 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 rounded text-xs font-bold transition-colors"
+                          >
+                            Approve Amendment
+                          </button>
+                        )}
                       </td>
                     </tr>
                   </React.Fragment>

@@ -114,7 +114,7 @@ export interface DailyReconciliation {
   expectedCashUsd: number;
   varianceUsd: number;
   
-  status: ReconStatus | 'AMENDMENT_REQUESTED' | 'AMENDMENT_APPROVED';
+  status: ReconStatus | 'AMENDMENT_REQUESTED' | 'AMENDMENT_PENDING_HEAD_ACCOUNTANT' | 'AMENDMENT_PENDING_DIRECTOR' | 'AMENDMENT_APPROVED';
   accountantNotes?: string;
   notes?: string;
   signature?: string;

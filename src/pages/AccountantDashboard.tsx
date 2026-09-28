@@ -9,10 +9,12 @@ import clsx from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ReconModal } from '../components/ReconModal';
 import { ExchangeRatesModal } from '../components/ExchangeRatesModal';
+import { AmendmentStagePills, isAmendmentStatus } from '../components/AmendmentStagePills';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../components/AuthProvider';
 
 export function AccountantDashboard() {
+  const { user } = useAuth();
   const [reconciliations, setReconciliations] = useState<DailyReconciliation[]>([]);
   const [rates, setRates] = useState<ExchangeRate[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
@@ -50,15 +52,17 @@ export function AccountantDashboard() {
     }
   };
 
-  const updateStatus = async (id: string, status: string, recon?: any) => {
-    if (status === 'AMENDMENT_APPROVED' && recon) {
-      // The server decides whether both parties have now approved and flips
-      // the status itself, against the current DB row - not this possibly
-      // stale `recon` snapshot - so two near-simultaneous approvals can't
-      // race and leave the status stuck behind two true flags.
-      await api.put(`/reconciliations/${id}`, { accountantAmendmentApproval: true });
-    } else {
-      await api.put(`/reconciliations/${id}`, { status });
+  const updateStatus = async (id: string, status: string) => {
+    await api.put(`/reconciliations/${id}`, { status });
+    loadData();
+  };
+
+  const approveAmendment = async (id: string) => {
+    try {
+      await api.put(`/reconciliations/${id}/amendment-approve`, {});
+    } catch (e) {
+      console.error(e);
+      alert('Failed to approve amendment. It may have already moved to the next stage.');
     }
     loadData();
   };
@@ -188,7 +192,9 @@ export function AccountantDashboard() {
           >
             <option value="ALL">All Statuses</option>
             <option value="PENDING">Pending</option>
-            <option value="AMENDMENT_REQUESTED">Amendment Requested</option>
+            <option value="AMENDMENT_REQUESTED">Amendment: Awaiting Auditor</option>
+            <option value="AMENDMENT_PENDING_HEAD_ACCOUNTANT">Amendment: Awaiting Head Accountant</option>
+            <option value="AMENDMENT_PENDING_DIRECTOR">Amendment: Awaiting Director</option>
             <option value="APPROVED">Approved</option>
             <option value="FLAGGED">Flagged</option>
           </select>
@@ -240,13 +246,17 @@ export function AccountantDashboard() {
                       {(r.varianceUsd || 0) > 0 ? '+' : ''}{(r.varianceUsd || 0).toFixed(2)}
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <span className={clsx("px-2 py-1 rounded text-xs font-semibold", 
-                        r.status === 'APPROVED' ? "bg-emerald-500/20 text-emerald-400" :
-                        r.status === 'FLAGGED' ? "bg-rose-500/20 text-rose-400" :
-                        "bg-amber-500/20 text-amber-400"
-                      )}>
-                        {r.status}
-                      </span>
+                      {isAmendmentStatus(r.status) ? (
+                        <AmendmentStagePills status={r.status} className="justify-center" />
+                      ) : (
+                        <span className={clsx("px-2 py-1 rounded text-xs font-semibold",
+                          r.status === 'APPROVED' ? "bg-emerald-500/20 text-emerald-400" :
+                          r.status === 'FLAGGED' ? "bg-rose-500/20 text-rose-400" :
+                          "bg-amber-500/20 text-amber-400"
+                        )}>
+                          {r.status}
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-right space-x-2 flex justify-end">
                       <button disabled={r.salesConfirmed}  onClick={(e) => { e.stopPropagation(); setEditingSalesId(r.id) }} className={`px-3 py-1 rounded text-xs font-bold transition-colors ${r.salesConfirmed ? "bg-slate-800 text-slate-500 cursor-not-allowed" : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20"}`}>
@@ -272,15 +282,10 @@ export function AccountantDashboard() {
                           </button>
                         </div>
                       )}
-                      {r.status === 'AMENDMENT_REQUESTED' && !r.accountantAmendmentApproval && (
-                        <button  onClick={(e) => { e.stopPropagation(); updateStatus(r.id, 'AMENDMENT_APPROVED', r)  }} className="px-3 py-1 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 rounded text-xs font-bold transition-colors">
+                      {r.status === 'AMENDMENT_PENDING_HEAD_ACCOUNTANT' && (user?.role === 'HEAD_ACCOUNTANT' || user?.role === 'ADMIN') && (
+                        <button  onClick={(e) => { e.stopPropagation(); approveAmendment(r.id)  }} className="px-3 py-1 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 rounded text-xs font-bold transition-colors">
                           Approve Amendment
                         </button>
-                      )}
-                      {r.status === 'AMENDMENT_REQUESTED' && r.accountantAmendmentApproval && (
-                        <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded text-xs font-bold">
-                          Approved &middot; awaiting Auditor
-                        </span>
                       )}
                     </td>
                   </tr>

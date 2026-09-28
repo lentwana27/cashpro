@@ -8,6 +8,7 @@ import clsx from 'clsx';
 import { formatDistanceToNow, format } from 'date-fns';
 import { useAuth } from '../components/AuthProvider';
 import { ReconModal } from '../components/ReconModal';
+import { AmendmentStagePills, isAmendmentStatus } from '../components/AmendmentStagePills';
 import { BranchHistoryModal } from '../components/BranchHistoryModal';
 import { CashierHistoryModal } from '../components/CashierHistoryModal';
 import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, Cell } from 'recharts';
@@ -424,14 +425,18 @@ export function SystemBranches() {
                                           </span>
                                         </td>
                                         <td className="px-4 py-3">
-                                          <span className={clsx(
-                                            "px-2 py-1 rounded text-xs font-bold uppercase tracking-wider border",
-                                            c.status === 'APPROVED' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
-                                            c.status === 'FLAGGED' ? "bg-rose-500/10 text-rose-400 border-rose-500/20" :
-                                            "bg-blue-500/10 text-blue-400 border-blue-500/20"
-                                          )}>
-                                            {c.status}
-                                          </span>
+                                          {isAmendmentStatus(c.status) ? (
+                                            <AmendmentStagePills status={c.status} />
+                                          ) : (
+                                            <span className={clsx(
+                                              "px-2 py-1 rounded text-xs font-bold uppercase tracking-wider border",
+                                              c.status === 'APPROVED' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
+                                              c.status === 'FLAGGED' ? "bg-rose-500/10 text-rose-400 border-rose-500/20" :
+                                              "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                                            )}>
+                                              {c.status}
+                                            </span>
+                                          )}
                                         </td>
                                       </tr>
                                     );

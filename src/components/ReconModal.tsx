@@ -9,9 +9,16 @@ import { X } from 'lucide-react';
 import clsx from 'clsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Download, Trash2 } from 'lucide-react';
+import { Download, Trash2, ShieldCheck } from 'lucide-react';
+import { AmendmentStagePills, isAmendmentStatus } from './AmendmentStagePills';
 
 const money = (n: any) => `$${(Number(n) || 0).toFixed(2)}`;
+
+const AMENDMENT_APPROVER_ROLES: Record<string, string[]> = {
+  AMENDMENT_REQUESTED: ['AUDITOR', 'ADMIN'],
+  AMENDMENT_PENDING_HEAD_ACCOUNTANT: ['HEAD_ACCOUNTANT', 'ADMIN'],
+  AMENDMENT_PENDING_DIRECTOR: ['DIRECTOR', 'ADMIN'],
+};
 
 const sumUsd = (val: any): number => {
   if (!val) return 0;
@@ -106,6 +113,7 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [approvingAmendment, setApprovingAmendment] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteReason, setDeleteReason] = useState('');
   const [branches, setBranches] = useState<any[]>([]);
@@ -113,6 +121,21 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
   useEffect(() => {
     api.get('/branches').then(setBranches).catch(() => {});
   }, []);
+
+  const canApproveAmendment = !!user && (AMENDMENT_APPROVER_ROLES[localRecon.status] || []).includes(user.role);
+
+  const handleApproveAmendment = async () => {
+    setApprovingAmendment(true);
+    try {
+      const updated = await api.put(`/reconciliations/${localRecon.id}/amendment-approve`, {});
+      setLocalRecon(updated);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to approve amendment. It may have already moved to the next stage.');
+    } finally {
+      setApprovingAmendment(false);
+    }
+  };
 
   const handleDelete = async () => {
     if (!deleteReason.trim()) return;
@@ -373,6 +396,12 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
           <Download className="w-4 h-4" />
           {downloading ? "Exporting..." : "Download PDF"}
         </button>
+        {canApproveAmendment && (
+          <button onClick={handleApproveAmendment} disabled={approvingAmendment} className="flex items-center gap-2 text-blue-400 hover:text-white bg-blue-500/10 hover:bg-blue-500/20 p-2 px-3 rounded-lg transition-colors border border-blue-500/20 text-sm font-bold disabled:opacity-50">
+            <ShieldCheck className="w-4 h-4" />
+            {approvingAmendment ? "Approving..." : "Approve Amendment"}
+          </button>
+        )}
         {user?.role === 'ADMIN' && (
           <button onClick={() => setShowDeleteConfirm(true)} disabled={deleting} className="flex items-center gap-2 text-rose-400 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 p-2 px-3 rounded-lg transition-colors border border-rose-500/20 text-sm font-bold disabled:opacity-50">
             <Trash2 className="w-4 h-4" />
@@ -384,14 +413,16 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
         </button>
     </div>
     <div className="bg-[#0a192f] flex-1 flex flex-col">
-      <div className="p-6 border-b border-[#1e345e] flex justify-between items-center bg-[#0a192f] z-10 pr-72">
+      <div className="p-6 border-b border-[#1e345e] flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 bg-[#0a192f] z-10 pr-24 sm:pr-96">
         <div>
           <h2 className="text-xl font-bold text-white">Reconciliation Details</h2>
           <p className="text-sm text-slate-400 mt-1">
             {(branches || []).find((b: any) => b.id === localRecon.branchId)?.name || localRecon.branchId} &middot;{" "}
-            {safeFormat(localRecon.date || new Date(), "MMMM dd, yyyy")} - <span className="font-mono text-emerald-400">{localRecon.status}</span>
+            {safeFormat(localRecon.date || new Date(), "MMMM dd, yyyy")}
+            {!isAmendmentStatus(localRecon.status) && <> - <span className="font-mono text-emerald-400">{localRecon.status}</span></>}
           </p>
         </div>
+        {isAmendmentStatus(localRecon.status) && <AmendmentStagePills status={localRecon.status} />}
       </div>
       <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8 bg-[#061121]">
           <div>

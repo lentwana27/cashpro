@@ -9,6 +9,7 @@ import { format } from 'date-fns';
 import { useAuth } from '../components/AuthProvider';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ReconModal } from '../components/ReconModal';
+import { AmendmentStagePills, isAmendmentStatus } from '../components/AmendmentStagePills';
 
 export function AuditorDashboard() {
   const [reconciliations, setReconciliations] = useState<DailyReconciliation[]>([]);
@@ -61,15 +62,17 @@ export function AuditorDashboard() {
     }
   };
 
-  const updateStatus = async (id: string, status: string, recon?: any) => {
-    if (status === 'AMENDMENT_APPROVED' && recon) {
-      // The server decides whether both parties have now approved and flips
-      // the status itself, against the current DB row - not this possibly
-      // stale `recon` snapshot - so two near-simultaneous approvals can't
-      // race and leave the status stuck behind two true flags.
-      await api.put(`/reconciliations/${id}`, { auditorAmendmentApproval: true });
-    } else {
-      await api.put(`/reconciliations/${id}`, { status });
+  const updateStatus = async (id: string, status: string) => {
+    await api.put(`/reconciliations/${id}`, { status });
+    loadData();
+  };
+
+  const approveAmendment = async (id: string) => {
+    try {
+      await api.put(`/reconciliations/${id}/amendment-approve`, {});
+    } catch (e) {
+      console.error(e);
+      alert('Failed to approve amendment. It may have already moved to the next stage.');
     }
     loadData();
   };
@@ -121,7 +124,9 @@ export function AuditorDashboard() {
           >
             <option value="ALL">All Statuses</option>
             <option value="PENDING">Pending Approval</option>
-            <option value="AMENDMENT_REQUESTED">Amendment Requested</option>
+            <option value="AMENDMENT_REQUESTED">Amendment: Awaiting Auditor</option>
+            <option value="AMENDMENT_PENDING_HEAD_ACCOUNTANT">Amendment: Awaiting Head Accountant</option>
+            <option value="AMENDMENT_PENDING_DIRECTOR">Amendment: Awaiting Director</option>
             <option value="AMENDMENT_APPROVED">Amendment Approved</option>
             <option value="APPROVED">Approved</option>
             <option value="FLAGGED">Flagged for Audit</option>
@@ -160,14 +165,18 @@ export function AuditorDashboard() {
                       {(r.varianceUsd || 0) > 0 ? '+' : ''}{(r.varianceUsd || 0).toFixed(2)}
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <span className={clsx(
-                        "px-2 py-1 rounded text-xs font-bold uppercase tracking-wider border",
-                        r.status === 'APPROVED' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
-                        r.status === 'FLAGGED' ? "bg-rose-500/10 text-rose-400 border-rose-500/20" :
-                        "bg-blue-500/10 text-blue-400 border-blue-500/20"
-                      )}>
-                        {r.status}
-                      </span>
+                      {isAmendmentStatus(r.status) ? (
+                        <AmendmentStagePills status={r.status} className="justify-center" />
+                      ) : (
+                        <span className={clsx(
+                          "px-2 py-1 rounded text-xs font-bold uppercase tracking-wider border",
+                          r.status === 'APPROVED' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
+                          r.status === 'FLAGGED' ? "bg-rose-500/10 text-rose-400 border-rose-500/20" :
+                          "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                        )}>
+                          {r.status}
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-right">
                       {r.status !== 'FLAGGED' && (
@@ -201,18 +210,13 @@ export function AuditorDashboard() {
                           </button>
                         </div>
                       )}
-                      {r.status === 'AMENDMENT_REQUESTED' && !r.auditorAmendmentApproval && (
+                      {r.status === 'AMENDMENT_REQUESTED' && (
                         <button
-                           onClick={(e) => { e.stopPropagation(); updateStatus(r.id, 'AMENDMENT_APPROVED', r)  }}
+                           onClick={(e) => { e.stopPropagation(); approveAmendment(r.id)  }}
                           className="px-3 py-1.5 ml-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-400 rounded transition-colors text-xs font-bold"
                         >
                           Approve Amendment
                         </button>
-                      )}
-                      {r.status === 'AMENDMENT_REQUESTED' && r.auditorAmendmentApproval && (
-                        <span className="px-3 py-1.5 ml-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded text-xs font-bold">
-                          Approved &middot; awaiting Accountant
-                        </span>
                       )}
                     </td>
                   </tr>

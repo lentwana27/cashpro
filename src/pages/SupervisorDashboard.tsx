@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import clsx from "clsx";
+import { AmendmentStagePills, isAmendmentStatus } from "../components/AmendmentStagePills";
 
 export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: string }) {
   const { user } = useAuth();
@@ -240,12 +241,6 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
     (r) => r.status === "UNLOCK_APPROVED",
   );
 
-  const [isEnteringSalesFor, setIsEnteringSalesFor] =
-    useState<DailyReconciliation | null>(null);
-
-  const startSalesEntry = (rec: DailyReconciliation) =>
-    setIsEnteringSalesFor(rec);
-
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-[#0a192f] rounded-xl p-4 sm:p-6 border border-[#1e345e] shadow-lg gap-4">
@@ -285,19 +280,7 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
         </div>
       </div>
 
-      {isEnteringSalesFor ? (
-        <MissingSalesForm currentUser={user}
-          recon={isEnteringSalesFor}
-          rates={rates}
-          branch={branch}
-          cashiers={cashiers}
-          onCancel={() => setIsEnteringSalesFor(null)}
-          onSuccess={() => {
-            setIsEnteringSalesFor(null);
-            loadData();
-          }}
-        />
-      ) : submitted && submitted.status === "UNLOCK_REQUESTED" ? (
+      {submitted && submitted.status === "UNLOCK_REQUESTED" ? (
         <div className="bg-[#0a192f] border border-amber-500/50 shadow-2xl rounded-2xl p-4 sm:p-6 md:p-8 text-center ring-1 ring-inset ring-amber-500/10">
           <div className="mx-auto w-16 h-16 bg-amber-500/20 rounded-full flex items-center justify-center mb-4 border border-amber-500/50">
             <RotateCcw className="w-8 h-8 text-amber-400" animate-spin />
@@ -339,28 +322,24 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
           <p className="text-slate-400 mb-8">
             Your daily cash-up for{" "}
             {safeFormat(submitted.date || new Date(), "MMMM do, yyyy")} has been
-            submitted and is currently{" "}
-            <span className="font-semibold text-emerald-400">
-              {submitted.status}
-            </span>
-            .
+            submitted{isAmendmentStatus(submitted.status) ? "." : (
+              <>
+                {" "}and is currently{" "}
+                <span className="font-semibold text-emerald-400">{submitted.status}</span>.
+              </>
+            )}
           </p>
 
           {currentMissingSales && (
             <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 sm:p-6 mb-8 mt-4 shadow-inner max-w-sm mx-auto">
               <h3 className="text-lg font-bold text-blue-400 mb-2">
-                Action Required
+                Awaiting System Sales
               </h3>
-              <p className="text-sm text-blue-300 mb-4">
-                Please enter the final sales generated from the system for this
-                specific cash-up.
+              <p className="text-sm text-blue-300">
+                The final sales figures from the system still need to be entered
+                for this cash-up. This is done by the Accountant or Auditor, not
+                the Supervisor.
               </p>
-              <button
-                onClick={() => startSalesEntry(submitted)}
-                className="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-lg shadow-lg transition-colors flex items-center justify-center gap-2"
-              >
-                Enter System Sales
-              </button>
             </div>
           )}
 
@@ -419,21 +398,10 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
             >
               Edit Submission
             </button>
-          ) : submitted.status === "AMENDMENT_REQUESTED" ? (
+          ) : isAmendmentStatus(submitted.status) ? (
             <div className="px-6 py-3 bg-slate-800 border border-[#1e345e] rounded-lg inline-block mx-auto text-left">
               <div className="font-medium text-slate-300 mb-2">Amendment Requested</div>
-              <div className="flex items-center gap-2 text-sm mb-1">
-                <span className={clsx("w-2 h-2 rounded-full", submitted.accountantAmendmentApproval ? "bg-emerald-500" : "bg-slate-600")} />
-                <span className={submitted.accountantAmendmentApproval ? "text-emerald-400" : "text-slate-500"}>
-                  Accountant {submitted.accountantAmendmentApproval ? "approved" : "pending"}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <span className={clsx("w-2 h-2 rounded-full", submitted.auditorAmendmentApproval ? "bg-emerald-500" : "bg-slate-600")} />
-                <span className={submitted.auditorAmendmentApproval ? "text-emerald-400" : "text-slate-500"}>
-                  Auditor {submitted.auditorAmendmentApproval ? "approved" : "pending"}
-                </span>
-              </div>
+              <AmendmentStagePills status={submitted.status} />
             </div>
           ) : (
             <button
@@ -635,18 +603,22 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
                   </td>
                   <td className="px-6 py-4 text-center">
                     <div className="flex flex-col items-center justify-center gap-1">
-                      <span
-                        className={clsx(
-                          "px-2 py-1 rounded text-xs font-semibold",
-                          r.status === "APPROVED"
-                            ? "bg-emerald-500/20 text-emerald-400"
-                            : r.status === "FLAGGED"
-                              ? "bg-rose-500/20 text-rose-400"
-                              : "bg-amber-500/20 text-amber-400",
-                        )}
-                      >
-                        {r.status}
-                      </span>
+                      {isAmendmentStatus(r.status) ? (
+                        <AmendmentStagePills status={r.status} className="justify-center" />
+                      ) : (
+                        <span
+                          className={clsx(
+                            "px-2 py-1 rounded text-xs font-semibold",
+                            r.status === "APPROVED"
+                              ? "bg-emerald-500/20 text-emerald-400"
+                              : r.status === "FLAGGED"
+                                ? "bg-rose-500/20 text-rose-400"
+                                : "bg-amber-500/20 text-amber-400",
+                          )}
+                        >
+                          {r.status}
+                        </span>
+                      )}
                       {!r.salesConfirmed && (
                         <button
                           onClick={() => {
@@ -833,8 +805,6 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
                   await api.put(`/reconciliations/${submitted.id}`, {
                     status: "AMENDMENT_REQUESTED",
                     amendmentNotes: updatedNotes,
-                    accountantAmendmentApproval: false,
-                    auditorAmendmentApproval: false,
                   });
                   setShowAmendModal(false);
                   setAmendReason("");
@@ -1640,186 +1610,6 @@ function CashUpForm({ currentUser,
         </div>
       </div>
     </form>
-  );
-}
-
-function MissingSalesForm({ currentUser, recon, rates, branch, cashiers, onCancel, onSuccess }: any) {
-    const cashBreakdown = recon?.tillCashBreakdown || [];
-  const tillNames =
-    branch?.hasTills && branch.tills?.length > 0
-      ? branch.tills.map((t: any) => t.name)
-      : ["Total Sales"];
-
-  const [tillVariances, setTillVariances] = useState<any[]>(() => {
-    if (recon?.tillVariances && recon.tillVariances.length > 0) return recon.tillVariances;
-    return tillNames.map((name: string) => {
-        const matchingCash = cashBreakdown.filter((cb: any) => cb.description.includes(name) || cb.description.includes("End of Day Physical Cash Counted"));
-        const totalCash = matchingCash.reduce((acc: number, curr: any) => acc + (curr.usdEquivalent || 0), 0);
-        const cashierId = matchingCash.find((cb: any) => cb.cashierId)?.cashierId || '';
-        const cashierName = matchingCash.find((cb: any) => cb.cashierName)?.cashierName || '';
-        return {
-            tillName: name,
-            cashierId,
-            cashierName,
-            expected: 0,
-            actual: totalCash,
-            variance: 0
-        };
-    });
-  });
-  const currencies = rates.map((r: any) => r.currencyCode);
-  const getUsd = (amount: number, code: string) => {
-    const rate =
-      (rates || []).find((r: any) => r.currencyCode === code)?.rateToUsd || 1;
-    return amount * rate;
-  };
-  const createItem = (desc: string): ReconLineItem => ({
-    id: Math.random().toString(),
-    reconciliationId: "",
-    description: desc,
-    amount: 0,
-    currencyCode: "USD",
-    usdEquivalent: 0,
-  });
-
-  const ensureArray = (item: any, defaultDescs: string[]): ReconLineItem[] => {
-    if (!item) return defaultDescs.map(createItem);
-    if (Array.isArray(item))
-      return item.length > 0 ? item : defaultDescs.map(createItem);
-    return [{ ...item, description: item.description || defaultDescs[0] }];
-  };
-
-  const [sales, setSales] = useState<ReconLineItem[]>(
-    ensureArray(recon.totalSales, tillNames),
-  );
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const updatedTotalSales = sales;
-      // We also need to recalculate expected cash and variance if we change sales!
-      const getSum = (arr: any) => {
-        if (!arr) return 0;
-        if (Array.isArray(arr))
-          return arr.reduce((a: number, b: any) => a + b.usdEquivalent, 0);
-        return arr.usdEquivalent || 0;
-      };
-
-      const tSales = getSum(updatedTotalSales) + getSum(recon.depositsReceived) + getSum(recon.manualSalesToday);
-      const tDeductions =
-        getSum(recon.debtors) +
-        getSum(recon.depositClaims) +
-        getSum(recon.returnsRefunds) +
-        getSum(recon.expenses) +
-        getSum(recon.purchases) + getSum(recon.manualSalesPrevious);
-      const expected = tSales - tDeductions;
-      const cashTotalUsd = recon.endOfDayCash?.usdEquivalent || 0;
-      const variance = cashTotalUsd - expected;
-      
-      const computedTillVariances = tillVariances.map((tv: any, idx: number) => {
-        const tillSales = updatedTotalSales[idx]?.usdEquivalent || 0;
-        const matchingCash = cashBreakdown.filter((cb: any) => cb.description.includes(tv.tillName) || cb.description.includes("End of Day Physical Cash Counted"));
-        const tillCash = matchingCash.reduce((acc: number, curr: any) => acc + (curr.usdEquivalent || 0), 0);
-        const cashier = (cashiers || []).find((c: any) => c.id === tv.cashierId);
-        return {
-          ...tv,
-          cashierName: cashier?.name || 'Unknown',
-          expected: tillSales,
-          actual: tillCash,
-          variance: tillCash - tillSales
-        };
-      });
-
-      await api.put(`/reconciliations/${recon.id}`, {
-        totalSales: updatedTotalSales,
-        expectedCashUsd: expected,
-        varianceUsd: variance,
-        tillVariances: computedTillVariances,
-        salesConfirmed: true,
-        salesInputtedBy: recon.salesInputtedBy || currentUser?.id,
-        salesInputtedByName: recon.salesInputtedByName || currentUser?.name,
-      });
-      onSuccess();
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  return (
-    <div className="bg-[#0a192f] border border-blue-500/30 rounded-xl overflow-hidden shadow-2xl">
-      <div className="px-6 py-4 bg-blue-500/10 border-b border-blue-500/20">
-        <h2 className="text-xl font-bold text-blue-400">Enter System Sales</h2>
-        <p className="text-sm text-blue-300/70 mt-1">
-          For cash up Date: {safeFormat(recon.date || new Date(), "MMMM do, yyyy")}
-        </p>
-      </div>
-      <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6 bg-[#061121]">
-        
-      {branch?.hasTills && branch.tills?.length > 0 && (
-        <div className="bg-[#112240] p-4 rounded-xl border border-blue-500/20 mb-6">
-          <h3 className="text-lg font-bold text-white mb-4">Till & Cashier Assignment</h3>
-          <div className="space-y-4">
-            {tillVariances.map((tv: any, idx: number) => (
-              <div key={idx} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-3 bg-[#0a192f] rounded-lg border border-[#1e345e]">
-                <div className="font-medium text-blue-400 w-1/3">{tv.tillName}</div>
-                <div className="flex-1 w-full">
-                  <select 
-                    value={tv.cashierId || ''} 
-                    onChange={e => {
-                      const newVars = [...tillVariances];
-                      newVars[idx].cashierId = e.target.value;
-                      setTillVariances(newVars);
-                      if (e.target.value === 'none') {
-                        const newSales = [...sales];
-                        if (newSales[idx]) {
-                          newSales[idx].amount = 0;
-                          newSales[idx].usdEquivalent = 0;
-                          setSales(newSales);
-                        }
-                      }
-                    }}
-                    className="w-full bg-[#061121] border border-[#1e345e] rounded-lg p-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    required
-                  >
-                    <option value="">Select Cashier for {tv.tillName}...</option>
-                    <option value="none">None - Not Working</option>
-                    {cashiers.map((c: any) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-        <ReconListField
-          title="Total Sales (from POS System)"
-          items={sales}
-          setItems={setSales}
-          currencies={currencies}
-          getUsd={getUsd}
-          hiddenIndices={tillVariances.map((tv, i) => tv.cashierId === 'none' ? i : -1).filter(i => i !== -1)}
-        />
-
-        <div className="flex justify-end gap-4 mt-8 pt-6 border-t border-[#1e345e]">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-6 py-2 bg-[#112240] hover:bg-[#1a2d53] text-slate-300 font-medium rounded-xl border border-[#1e345e] transition-all"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-xl shadow-[0_0_15px_rgba(59,130,246,0.3)] transition-all"
-          >
-            Confirm & Save Sales
-          </button>
-        </div>
-      </form>
-    </div>
   );
 }
 

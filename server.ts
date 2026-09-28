@@ -364,34 +364,12 @@ api.put('/reconciliations/:id', async (req, res) => {
 
   const updates: any = { ...req.body };
 
-  // An amendment needs both the accountant's and the auditor's approval. Each
-  // approval only ever sets its own flag client-side (to avoid racing on a
-  // possibly-stale view of the other party's flag), so the transition to
-  // AMENDMENT_APPROVED is decided here, against the current DB row, once.
-  if (!updates.status && (updates.accountantAmendmentApproval || updates.auditorAmendmentApproval)) {
-    const existingRows = await db.select().from(schema.reconciliations).where(eq(schema.reconciliations.id, req.params.id));
-    const existing = existingRows[0];
-    if (existing) {
-      const accountantApproved = updates.accountantAmendmentApproval ?? existing.accountantAmendmentApproval;
-      const auditorApproved = updates.auditorAmendmentApproval ?? existing.auditorAmendmentApproval;
-      if (accountantApproved && auditorApproved && existing.status !== 'AMENDMENT_APPROVED') {
-        updates.status = 'AMENDMENT_APPROVED';
-      }
-    }
-  }
-
   if (uid && uname) {
     if (req.body.salesConfirmed === true) {
       logAction(uid, uname, 'CONFIRM SALES', `Locked sales for reconciliation ${req.params.id}`);
     }
     if (req.body.salesInputtedByName) {
       logAction(uid, uname, 'INPUT SALES', `Inputted sales for reconciliation ${req.params.id}`);
-    }
-    if (req.body.auditorAmendmentApproval) {
-      logAction(uid, uname, 'AUDITOR AMENDMENT APPROVAL', `Auditor approved amendment for ${req.params.id}`);
-    }
-    if (req.body.accountantAmendmentApproval) {
-      logAction(uid, uname, 'ACCT AMENDMENT APPROVAL', `Accountant approved amendment for ${req.params.id}`);
     }
     if (updates.status) {
       logAction(uid, uname, 'UPDATE STATUS', `Status changed to ${updates.status} for ${req.params.id}`);
@@ -401,6 +379,52 @@ api.put('/reconciliations/:id', async (req, res) => {
   await db.update(schema.reconciliations).set({ ...updates, updatedAt: new Date().toISOString() }).where(eq(schema.reconciliations.id, req.params.id));
   const recs = await db.select().from(schema.reconciliations).where(eq(schema.reconciliations.id, req.params.id));
   res.json(recs[0] || {});
+});
+
+// Amendment approval is a strict sequence: Auditor -> Head Accountant -> Director.
+// Each stage is only reachable once the previous one has actually completed
+// (enforced against the current DB row, not client state), so - unlike the old
+// dual-approval model - two approvers can never race each other into a stuck
+// status: each stage has exactly one authorized role and one predecessor status.
+const AMENDMENT_APPROVAL_FLOW: Record<string, { approverRoles: string[]; nextStatus: string; actionLabel: string }> = {
+  AMENDMENT_REQUESTED: { approverRoles: ['AUDITOR', 'ADMIN'], nextStatus: 'AMENDMENT_PENDING_HEAD_ACCOUNTANT', actionLabel: 'AUDITOR AMENDMENT APPROVAL' },
+  AMENDMENT_PENDING_HEAD_ACCOUNTANT: { approverRoles: ['HEAD_ACCOUNTANT', 'ADMIN'], nextStatus: 'AMENDMENT_PENDING_DIRECTOR', actionLabel: 'HEAD ACCOUNTANT AMENDMENT APPROVAL' },
+  AMENDMENT_PENDING_DIRECTOR: { approverRoles: ['DIRECTOR', 'ADMIN'], nextStatus: 'AMENDMENT_APPROVED', actionLabel: 'DIRECTOR AMENDMENT APPROVAL' },
+};
+
+api.put('/reconciliations/:id/amendment-approve', async (req, res) => {
+  const uid = req.headers['x-user-id'] as string;
+  const uname = req.headers['x-user-name'] as string;
+  if (!uid) {
+    return res.status(401).json({ error: 'Missing user identity' });
+  }
+
+  const users = await db.select().from(schema.users).where(eq(schema.users.id, uid));
+  const user = users[0];
+  if (!user) {
+    return res.status(401).json({ error: 'User not found' });
+  }
+
+  const rows = await db.select().from(schema.reconciliations).where(eq(schema.reconciliations.id, req.params.id));
+  const recon = rows[0];
+  if (!recon) {
+    return res.status(404).json({ error: 'Reconciliation not found' });
+  }
+
+  const stage = AMENDMENT_APPROVAL_FLOW[recon.status];
+  if (!stage) {
+    return res.status(400).json({ error: `This reconciliation is not awaiting amendment approval (current status: ${recon.status})` });
+  }
+  if (!stage.approverRoles.includes(user.role)) {
+    return res.status(403).json({ error: 'Insufficient permissions for this approval stage' });
+  }
+
+  await db.update(schema.reconciliations).set({ status: stage.nextStatus, updatedAt: new Date().toISOString() }).where(eq(schema.reconciliations.id, req.params.id));
+  if (uname) {
+    logAction(uid, uname, stage.actionLabel, `Reconciliation ${req.params.id} moved from ${recon.status} to ${stage.nextStatus}`);
+  }
+  const updated = await db.select().from(schema.reconciliations).where(eq(schema.reconciliations.id, req.params.id));
+  res.json(updated[0] || {});
 });
 
 // System Updates Routes
