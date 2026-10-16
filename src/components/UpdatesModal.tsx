@@ -4,10 +4,21 @@ import { X, Megaphone, CheckCircle2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { api } from '../lib/api';
 import { useAuth } from './AuthProvider';
+import { PaginationBar, paginate } from './PaginationBar';
+import { Period, PERIOD_OPTIONS, getPeriodRange, inRange } from '../lib/period';
+
+const PAGE_SIZE = 5;
 
 export function UpdatesModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
   const { user } = useAuth();
   const [updates, setUpdates] = useState<any[]>([]);
+  const [search, setSearch] = useState('');
+  const [period, setPeriod] = useState<Period>('ALL');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [page, setPage] = useState(1);
+  useEffect(() => { setPage(1); }, [search, period, from, to]);
+  useEffect(() => { if (isOpen) { setSearch(''); setPeriod('ALL'); setFrom(''); setTo(''); setPage(1); } }, [isOpen]);
 
   useEffect(() => {
     if (isOpen) {
@@ -28,6 +39,14 @@ export function UpdatesModal({ isOpen, onClose }: { isOpen: boolean, onClose: ()
 
   if (!isOpen) return null;
 
+  const range = getPeriodRange(period, from, to);
+  const q = search.trim().toLowerCase();
+  const filtered = updates
+    .filter(u => inRange(String(u.date || '').substring(0, 10), range))
+    .filter(u => !q || `${u.title} ${u.id} ${(u.features || []).join(' ')}`.toLowerCase().includes(q));
+  const view = paginate<any>(filtered, page, PAGE_SIZE);
+  const filtersActive = !!q || period !== 'ALL';
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
@@ -40,14 +59,40 @@ export function UpdatesModal({ isOpen, onClose }: { isOpen: boolean, onClose: ()
           </button>
         </div>
         
+        {updates.length > 0 && (
+          <div className="px-6 py-3 border-b border-[#1e345e] bg-[#061121]/60 flex flex-wrap items-end gap-3">
+            <div className="flex-1 min-w-[10rem]">
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Search</label>
+              <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Title or feature..." className="w-full bg-[#112240] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500 placeholder:text-slate-500" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Period</label>
+              <select value={period} onChange={e => setPeriod(e.target.value as Period)} className="bg-[#112240] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+                {PERIOD_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+            {period === 'CUSTOM' && (
+              <>
+                <div><label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">From</label><input type="date" value={from} onChange={e => setFrom(e.target.value)} className="bg-[#112240] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500" /></div>
+                <div><label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">To</label><input type="date" value={to} onChange={e => setTo(e.target.value)} className="bg-[#112240] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500" /></div>
+              </>
+            )}
+            {filtersActive && (
+              <button onClick={() => { setSearch(''); setPeriod('ALL'); setFrom(''); setTo(''); }} className="text-xs text-slate-400 hover:text-white px-3 py-2 border border-[#1e345e] rounded-lg transition-colors">Clear filters</button>
+            )}
+          </div>
+        )}
+
         <div className="flex-1 overflow-auto p-6 space-y-8">
           {updates.length === 0 ? (
              <div className="text-slate-400 text-center py-8">No new updates.</div>
+          ) : filtered.length === 0 ? (
+             <div className="text-slate-400 text-center py-8">No updates match your filters.</div>
           ) : (
-            updates.map((update, idx) => (
+            view.pageItems.map((update, idx) => (
               <div key={update.id} className="relative pl-8">
                 <div className="absolute left-0 top-1 w-3 h-3 bg-emerald-500 rounded-full shadow-[0_0_10px_rgba(52,211,153,0.5)]"></div>
-                {idx !== updates.length - 1 && (
+                {idx !== view.pageItems.length - 1 && (
                   <div className="absolute left-[5px] top-4 bottom-[-32px] w-0.5 bg-[#1e345e]"></div>
                 )}
                 <div className="flex items-center gap-3 mb-2">
@@ -66,6 +111,9 @@ export function UpdatesModal({ isOpen, onClose }: { isOpen: boolean, onClose: ()
               </div>
             ))
           )}
+        </div>
+        <div className="px-6 pb-4 border-t border-[#1e345e]">
+          <PaginationBar page={view.currentPage} totalPages={view.totalPages} totalItems={filtered.length} pageSize={PAGE_SIZE} onPageChange={setPage} />
         </div>
       </div>
     </div>
