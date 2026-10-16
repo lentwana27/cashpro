@@ -13,6 +13,7 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { ReconModal } from '../components/ReconModal';
+import { AmendmentRequestsTable } from '../components/AmendmentRequestsTable';
 import { PaginationBar, paginate } from '../components/PaginationBar';
 import { AmendmentStagePills, isAmendmentStatus } from '../components/AmendmentStagePills';
 
@@ -25,6 +26,8 @@ export function DirectorDashboard() {
   
   const [selectedBranchFilter, setSelectedBranchFilter] = useState<string | null>(null);
   const [viewReconId, setViewReconId] = useState<string | null>(null);
+  const [tab, setTab] = useState<'overview' | 'amendments'>('overview');
+  const [users, setUsers] = useState<any[]>([]);
   const [showExportModal, setShowExportModal] = useState(false);
   const [recentStatus, setRecentStatus] = useState('ALL');
   const [recentPageSize, setRecentPageSize] = useState(10);
@@ -37,10 +40,12 @@ export function DirectorDashboard() {
   
   const loadData = React.useCallback(async () => {
     try {
-       const [recs, brs] = await Promise.all([
+       const [recs, brs, usrs] = await Promise.all([
          api.get('/reconciliations'),
-         api.get('/branches')
+         api.get('/branches'),
+         api.get('/users').catch(() => [])
        ]);
+       setUsers(usrs);
        setReconciliations(recs);
        setBranches(brs);
     } catch (e) {
@@ -228,6 +233,39 @@ export function DirectorDashboard() {
         </div>
       </div>
 
+      <div className="flex gap-1 border-b border-[#1e345e]">
+        {([
+          { id: 'overview', label: 'Executive Overview', count: null as number | null },
+          { id: 'amendments', label: 'Amendment Requests', count: reconciliations.filter((r: any) => r.status === 'AMENDMENT_PENDING_DIRECTOR').length },
+        ] as const).map(t => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={clsx(
+              'flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
+              tab === t.id ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-white'
+            )}
+          >
+            {t.label}
+            {t.count !== null && t.count > 0 && (
+              <span className="text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 rounded-full px-2 py-0.5" title="Awaiting your approval">{t.count}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'amendments' && (
+        <AmendmentRequestsTable
+          reconciliations={reconciliations}
+          branches={branches}
+          users={users}
+          onView={(r: any) => setViewReconId(r.id)}
+          onApprove={approveAmendment}
+          approvableStatus="AMENDMENT_PENDING_DIRECTOR"
+        />
+      )}
+
+      {tab === 'overview' && (<>
       {missingReconciliations.length > 0 && (
         <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 sm:p-6 shadow-inner">
           <div className="flex items-center gap-3 mb-4">
@@ -468,6 +506,7 @@ export function DirectorDashboard() {
           <PaginationBar page={recentView.currentPage} totalPages={recentView.totalPages} totalItems={recentFiltered.length} pageSize={recentPageSize} onPageChange={setRecentPage} />
         </div>
       </div>
+      </>)}
       <ExportReportModal 
         isOpen={showExportModal} 
         onClose={() => setShowExportModal(false)} 
