@@ -12,11 +12,14 @@ import { Period, PERIOD_OPTIONS, getPeriodRange, inRange } from '../lib/period';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ReconModal } from '../components/ReconModal';
 import { AmendmentStagePills, isAmendmentStatus } from '../components/AmendmentStagePills';
+import { AmendmentRequestsTable } from '../components/AmendmentRequestsTable';
 
 export function AuditorDashboard() {
   const [reconciliations, setReconciliations] = useState<DailyReconciliation[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
+  const [tab, setTab] = useState<'overview' | 'amendments'>('overview');
+  const [users, setUsers] = useState<any[]>([]);
   const [showExportModal, setShowExportModal] = useState(false);
   const [viewingRecon, setViewingRecon] = useState<any>(null);
   const [rates, setRates] = useState<any[]>([]);
@@ -37,11 +40,13 @@ export function AuditorDashboard() {
 
   const loadData = async () => {
     try {
-            const [rtData, recData, brData] = await Promise.all([
+            const [rtData, recData, brData, usrData] = await Promise.all([
         api.get('/rates'),
         api.get('/reconciliations'),
-        api.get('/branches')
+        api.get('/branches'),
+        api.get('/users').catch(() => [])
       ]);
+      setUsers(usrData);
       setRates(rtData);
       setReconciliations(recData);
       setBranches(brData);
@@ -118,6 +123,38 @@ export function AuditorDashboard() {
         </div>
       </div>
 
+      <div className="flex gap-1 border-b border-[#1e345e]">
+        {([
+          { id: 'overview', label: 'Audit Overview', count: null as number | null },
+          { id: 'amendments', label: 'Amendment Requests', count: reconciliations.filter(r => r.status === 'AMENDMENT_REQUESTED').length },
+        ] as const).map(t => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={clsx(
+              'flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
+              tab === t.id ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-white'
+            )}
+          >
+            {t.label}
+            {t.count !== null && t.count > 0 && (
+              <span className="text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 rounded-full px-2 py-0.5" title="Awaiting your approval">{t.count}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'amendments' && (
+        <AmendmentRequestsTable
+          reconciliations={reconciliations}
+          branches={branches}
+          users={users}
+          onView={setViewingRecon}
+          onApprove={approveAmendment}
+        />
+      )}
+
+      {tab === 'overview' && (<>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl p-4 sm:p-6 shadow-xl relative overflow-hidden">
           <div className="absolute top-0 right-0 p-4 sm:p-6 opacity-10"><ShieldAlert className="w-16 h-16" /></div>
@@ -289,6 +326,7 @@ export function AuditorDashboard() {
         
       </div>
       <CashierShortageChart reconciliations={filteredRecon} branches={branches} />
+      </>)}
       {viewingRecon && <ReconModal recon={viewingRecon} onClose={() => setViewingRecon(null)} />}
         {editingSalesId && (
         <InputSalesModal 
