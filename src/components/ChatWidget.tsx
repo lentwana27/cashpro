@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageCircle, X, Send, User as UserIcon, Circle } from 'lucide-react';
+import { MessageCircle, X, Send, User as UserIcon, Circle, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { paginate } from './PaginationBar';
+
+const DIRECTORY_PAGE_SIZE = 8;
+const THREAD_PAGE_SIZE = 30;
 import { useAuth } from './AuthProvider';
 import { api } from '../lib/api';
 import { User, Message } from '../lib/types';
@@ -15,6 +19,15 @@ export function ChatWidget() {
   const [activeUser, setActiveUser] = useState<User | null>(null);
   const [messageText, setMessageText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [dirSearch, setDirSearch] = useState('');
+  const [dirRole, setDirRole] = useState('ALL');
+  const [dirOnlineOnly, setDirOnlineOnly] = useState(false);
+  const [dirPage, setDirPage] = useState(1);
+  const [threadSearch, setThreadSearch] = useState('');
+  const [threadLimit, setThreadLimit] = useState(THREAD_PAGE_SIZE);
+
+  useEffect(() => { setDirPage(1); }, [dirSearch, dirRole, dirOnlineOnly]);
+  useEffect(() => { setThreadLimit(THREAD_PAGE_SIZE); setThreadSearch(''); }, [activeUser?.id]);
 
   useEffect(() => {
     if (!user) return;
@@ -80,6 +93,24 @@ export function ChatWidget() {
 
   if (!user || user.role === 'ADMIN') return null;
 
+  const lastMessageAt = (uid: string) => messages
+    .filter(m => (m.fromId === uid && m.toId === user.id) || (m.fromId === user.id && m.toId === uid))
+    .reduce((max, m) => Math.max(max, new Date(m.createdAt).getTime()), 0);
+  const roles = Array.from(new Set<string>(users.map(u => u.role as string)));
+  const filteredUsers = users
+    .filter(u => !dirSearch.trim() || u.name.toLowerCase().includes(dirSearch.trim().toLowerCase()))
+    .filter(u => dirRole === 'ALL' || u.role === dirRole)
+    .filter(u => !dirOnlineOnly || u.isOnline)
+    .sort((a, b) => lastMessageAt(b.id) - lastMessageAt(a.id) || a.name.localeCompare(b.name));
+  const dirView = paginate<User>(filteredUsers, dirPage, DIRECTORY_PAGE_SIZE);
+
+  const thread = activeUser
+    ? messages.filter(m => (m.fromId === activeUser.id && m.toId === user.id) || (m.fromId === user.id && m.toId === activeUser.id))
+    : [];
+  const threadMatches = thread.filter(m => !threadSearch.trim() || m.content.toLowerCase().includes(threadSearch.trim().toLowerCase()));
+  const threadShown = threadMatches.slice(Math.max(0, threadMatches.length - threadLimit));
+  const threadHidden = threadMatches.length - threadShown.length;
+
   return (
     <>
       <button 
@@ -106,8 +137,22 @@ export function ChatWidget() {
                 <h3 className="text-white font-bold text-sm">Directory</h3>
                 <button onClick={() => setIsOpen(false)} className="md:hidden text-slate-400"><X className="w-4 h-4"/></button>
               </div>
+              <div className="p-2 border-b border-[#1e345e] space-y-2">
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input type="text" value={dirSearch} onChange={e => setDirSearch(e.target.value)} placeholder="Search people..." className="w-full bg-[#112240] border border-[#1e345e] rounded-lg pl-8 pr-2 py-1.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500" />
+                </div>
+                <div className="flex gap-2">
+                  <select value={dirRole} onChange={e => setDirRole(e.target.value)} className="flex-1 min-w-0 bg-[#112240] border border-[#1e345e] rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-emerald-500">
+                    <option value="ALL">All roles</option>
+                    {roles.map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                  <button onClick={() => setDirOnlineOnly(v => !v)} className={clsx("px-2 py-1 rounded-lg border text-xs font-medium transition-colors", dirOnlineOnly ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" : "bg-[#112240] text-slate-400 border-[#1e345e] hover:text-white")}>Online</button>
+                </div>
+              </div>
               <div className="flex-1 overflow-y-auto">
-                {users.map(u => (
+                {dirView.pageItems.length === 0 && <div className="p-4 text-center text-xs text-slate-500">No people match.</div>}
+                {dirView.pageItems.map(u => (
                   <button 
                     key={u.id} 
                     onClick={() => setActiveUser(u)}
@@ -126,6 +171,13 @@ export function ChatWidget() {
                   </button>
                 ))}
               </div>
+              {filteredUsers.length > DIRECTORY_PAGE_SIZE && (
+                <div className="p-2 border-t border-[#1e345e] flex items-center justify-between text-[11px] text-slate-400">
+                  <button onClick={() => setDirPage(dirView.currentPage - 1)} disabled={dirView.currentPage <= 1} className="p-1 rounded border border-[#1e345e] bg-[#112240] disabled:opacity-40" aria-label="Previous page"><ChevronLeft className="w-3.5 h-3.5" /></button>
+                  <span className="font-mono">{dirView.currentPage} / {dirView.totalPages} · {filteredUsers.length}</span>
+                  <button onClick={() => setDirPage(dirView.currentPage + 1)} disabled={dirView.currentPage >= dirView.totalPages} className="p-1 rounded border border-[#1e345e] bg-[#112240] disabled:opacity-40" aria-label="Next page"><ChevronRight className="w-3.5 h-3.5" /></button>
+                </div>
+              )}
             </div>
 
             {/* Chat Area */}
@@ -153,8 +205,23 @@ export function ChatWidget() {
                     </button>
                   </div>
 
+                  <div className="px-3 py-2 border-b border-[#1e345e] bg-[#061121]/60">
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      <input type="text" value={threadSearch} onChange={e => setThreadSearch(e.target.value)} placeholder="Search this conversation..." className="w-full bg-[#112240] border border-[#1e345e] rounded-lg pl-8 pr-2 py-1.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500" />
+                    </div>
+                  </div>
+
                   <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                    {messages.filter(m => (m.fromId === activeUser.id && m.toId === user.id) || (m.fromId === user.id && m.toId === activeUser.id)).map(m => {
+                    {threadHidden > 0 && (
+                      <button onClick={() => setThreadLimit(l => l + THREAD_PAGE_SIZE)} className="w-full text-xs text-slate-400 hover:text-white border border-[#1e345e] rounded-lg py-1.5 transition-colors">
+                        Load older messages ({threadHidden} more)
+                      </button>
+                    )}
+                    {threadMatches.length === 0 && (
+                      <div className="text-center text-xs text-slate-500 py-6">{threadSearch ? 'No messages match your search.' : 'No messages yet.'}</div>
+                    )}
+                    {threadShown.map(m => {
                       const isMe = m.fromId === user.id;
                       return (
                         <div key={m.id} className={clsx("flex flex-col max-w-[85%]", isMe ? "ml-auto items-end" : "mr-auto items-start")}>
