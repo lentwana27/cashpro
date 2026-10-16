@@ -808,6 +808,7 @@ export function SystemBranches() {
         <BranchHistoryModal
           branch={selectedBranch}
           reconciliations={reconciliations}
+          users={users}
           onClose={() => setShowBranchHistory(false)}
         />
       )}
