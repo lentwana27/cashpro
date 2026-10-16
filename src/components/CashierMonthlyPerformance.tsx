@@ -5,12 +5,18 @@ import { CalendarRange, Search } from 'lucide-react';
 import { CashierHistoryModal } from './CashierHistoryModal';
 import { Branch } from '../lib/types';
 import clsx from 'clsx';
+import { PaginationBar, paginate } from './PaginationBar';
 import { format, parseISO } from 'date-fns';
 
 export function CashierMonthlyPerformance({ reconciliations, branches }: { reconciliations: DailyReconciliation[], branches: Branch[] }) {
   const [selectedCashier, setSelectedCashier] = useState<{id: string, name: string} | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMonth, setSelectedMonth] = useState<string>(safeFormat(new Date(), 'yyyy-MM'));
+  const [branchFilter, setBranchFilter] = useState('ALL');
+  const [resultFilter, setResultFilter] = useState<'ALL' | 'SHORT' | 'OVER' | 'BALANCED'>('ALL');
+  const [pageSize, setPageSize] = useState(10);
+  const [page, setPage] = useState(1);
+  React.useEffect(() => { setPage(1); }, [searchTerm, selectedMonth, branchFilter, resultFilter, pageSize]);
 
   const monthlyStats = useMemo(() => {
     const stats: Record<string, { id: string, name: string, branchName: string, overUSD: number, underUSD: number, overZAR: number, underZAR: number }> = {};
@@ -48,13 +54,20 @@ export function CashierMonthlyPerformance({ reconciliations, branches }: { recon
     return Array.from(m).sort((a, b) => b.localeCompare(a));
   }, [reconciliations]);
 
+  const branchNames = Array.from(new Set<string>(monthlyStats.map(c => c.branchName))).sort();
+  const visible = monthlyStats
+    .filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()))
+    .filter(c => branchFilter === 'ALL' || c.branchName === branchFilter)
+    .filter(c => resultFilter === 'ALL' || (resultFilter === 'SHORT' ? c.underUSD < 0 : resultFilter === 'OVER' ? c.overUSD > 0 : c.underUSD === 0 && c.overUSD === 0));
+  const view = paginate<typeof monthlyStats[number]>(visible, page, pageSize);
+
   return (
     <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl shadow-xl overflow-hidden mt-6">
       <div className="p-4 sm:p-6 border-b border-[#1e345e] bg-[#061121] flex justify-between items-center flex-wrap gap-4">
         <h2 className="text-lg font-bold text-white flex items-center gap-2">
           <CalendarRange className="w-5 h-5 text-indigo-400" /> Monthly Variance Aggregation
         </h2>
-        <div className="flex items-center gap-3 w-full sm:w-auto mt-3 sm:mt-0">
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto mt-3 sm:mt-0">
           <div className="relative flex-1 sm:flex-none">
             <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
             <input
@@ -65,7 +78,20 @@ export function CashierMonthlyPerformance({ reconciliations, branches }: { recon
               className="w-full bg-[#112240] border border-[#1e345e] rounded-lg py-1.5 pl-9 pr-4 text-white text-sm focus:outline-none focus:border-blue-500 sm:w-64"
             />
           </div>
-          <select 
+          <select value={branchFilter} onChange={e => setBranchFilter(e.target.value)} className="bg-[#112240] border border-[#1e345e] rounded-lg py-1.5 px-3 text-white text-sm focus:outline-none focus:border-blue-500">
+            <option value="ALL">All Branches</option>
+            {branchNames.map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+          <select value={resultFilter} onChange={e => setResultFilter(e.target.value as any)} className="bg-[#112240] border border-[#1e345e] rounded-lg py-1.5 px-3 text-white text-sm focus:outline-none focus:border-blue-500">
+            <option value="ALL">All Results</option>
+            <option value="SHORT">With Shortages</option>
+            <option value="OVER">With Overs</option>
+            <option value="BALANCED">Fully Balanced</option>
+          </select>
+          <select value={pageSize} onChange={e => setPageSize(Number(e.target.value))} className="bg-[#112240] border border-[#1e345e] rounded-lg py-1.5 px-3 text-white text-sm focus:outline-none focus:border-blue-500">
+            {[5, 10, 25, 50].map(n => <option key={n} value={n}>{n} / page</option>)}
+          </select>
+          <select
             value={selectedMonth} 
             onChange={e => setSelectedMonth(e.target.value)}
             className="bg-[#112240] border border-[#1e345e] text-white rounded py-1.5 px-3 text-sm focus:outline-none flex-1 sm:flex-none"
@@ -101,8 +127,8 @@ export function CashierMonthlyPerformance({ reconciliations, branches }: { recon
                       No records for this month.
                     </td>
                   </tr>
-              ) : monthlyStats.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase())).map((c, idx) => (
-                <tr key={idx} className="hover:bg-[#1e345e] transition-colors cursor-pointer" onClick={() => setSelectedCashier({ id: c.id, name: c.name })}>
+              ) : view.pageItems.map((c) => (
+                <tr key={c.id} className="hover:bg-[#1e345e] transition-colors cursor-pointer" onClick={() => setSelectedCashier({ id: c.id, name: c.name })}>
 
                   <td className="px-6 py-4 font-bold text-white">{c.name}</td>
                   <td className="px-6 py-4 text-slate-300">{c.branchName}</td>
@@ -120,8 +146,14 @@ export function CashierMonthlyPerformance({ reconciliations, branches }: { recon
                   </td>
                 </tr>
               ))}
+              {monthlyStats.length > 0 && visible.length === 0 && (
+                <tr><td colSpan={6} className="px-6 py-8 text-center text-slate-400">No operators match the filters.</td></tr>
+              )}
             </tbody>
           </table>
+        </div>
+        <div className="px-4 sm:px-6 pb-4">
+          <PaginationBar page={view.currentPage} totalPages={view.totalPages} totalItems={visible.length} pageSize={pageSize} onPageChange={setPage} />
         </div>
       </div>
       {selectedCashier && (

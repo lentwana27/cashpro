@@ -11,6 +11,8 @@ export function CashierPerformance({ reconciliations, branches }: { reconciliati
   const [selectedCashier, setSelectedCashier] = useState<{id: string, name: string} | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [resultFilter, setResultFilter] = useState<'ALL' | 'SHORT' | 'OVER' | 'BALANCED'>('ALL');
+  const [branchFilter, setBranchFilter] = useState('ALL');
+  const [sortBy, setSortBy] = useState<'SHORTAGE' | 'NAME' | 'OVERS' | 'SHIFTS'>('SHORTAGE');
   const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
   const cashierStats = useMemo(() => {
@@ -43,8 +45,15 @@ export function CashierPerformance({ reconciliations, branches }: { reconciliati
 
   const visible = cashierStats
     .filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()))
+    .filter(c => branchFilter === 'ALL' || c.branchName === branchFilter)
     .filter(c => resultFilter === 'ALL' || (resultFilter === 'SHORT' ? c.totalUnders < 0 : resultFilter === 'OVER' ? c.totalOvers > 0 : c.totalUnders === 0 && c.totalOvers === 0));
-  const view = paginate<typeof cashierStats[number]>(visible, page, pageSize);
+  const sorted = [...visible].sort((a, b) =>
+    sortBy === 'NAME' ? a.name.localeCompare(b.name) :
+    sortBy === 'OVERS' ? b.totalOvers - a.totalOvers :
+    sortBy === 'SHIFTS' ? b.counts - a.counts :
+    a.totalUnders - b.totalUnders);
+  const branchNames = Array.from(new Set<string>(cashierStats.map(c => c.branchName))).sort();
+  const view = paginate<typeof cashierStats[number]>(sorted, page, pageSize);
   const selCls = 'bg-[#112240] border border-[#1e345e] rounded-lg py-1.5 px-3 text-white text-sm focus:outline-none focus:border-blue-500';
 
   return (
@@ -54,6 +63,16 @@ export function CashierPerformance({ reconciliations, branches }: { reconciliati
           <Users className="w-5 h-5 text-indigo-400" /> Cashier Performance (Shortages per Till Operator)
         </h2>
         <div className="flex flex-wrap items-center gap-2">
+        <select value={branchFilter} onChange={e => { setBranchFilter(e.target.value); setPage(1); }} className={selCls}>
+          <option value="ALL">All Branches</option>
+          {branchNames.map(n => <option key={n} value={n}>{n}</option>)}
+        </select>
+        <select value={sortBy} onChange={e => { setSortBy(e.target.value as any); setPage(1); }} className={selCls}>
+          <option value="SHORTAGE">Sort: Biggest shortage</option>
+          <option value="OVERS">Sort: Biggest overs</option>
+          <option value="SHIFTS">Sort: Most shifts</option>
+          <option value="NAME">Sort: Name A-Z</option>
+        </select>
         <select value={resultFilter} onChange={e => { setResultFilter(e.target.value as any); setPage(1); }} className={selCls}>
           <option value="ALL">All Results</option>
           <option value="SHORT">With Shortages</option>
