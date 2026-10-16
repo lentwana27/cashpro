@@ -7,6 +7,8 @@ import { Search, ShieldAlert, Download, Building2, Calendar, FileText, ChevronDo
 import clsx from 'clsx';
 import { format } from 'date-fns';
 import { useAuth } from '../components/AuthProvider';
+import { PaginationBar, paginate } from '../components/PaginationBar';
+import { Period, PERIOD_OPTIONS, getPeriodRange, inRange } from '../lib/period';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ReconModal } from '../components/ReconModal';
 import { AmendmentStagePills, isAmendmentStatus } from '../components/AmendmentStagePills';
@@ -19,6 +21,14 @@ export function AuditorDashboard() {
   const [viewingRecon, setViewingRecon] = useState<any>(null);
   const [rates, setRates] = useState<any[]>([]);
   const [editingSalesId, setEditingSalesId] = useState<string | null>(null);
+  const [searchBranch, setSearchBranch] = useState('');
+  const [branchFilter, setBranchFilter] = useState('ALL');
+  const [period, setPeriod] = useState<Period>('ALL');
+  const [periodFrom, setPeriodFrom] = useState('');
+  const [periodTo, setPeriodTo] = useState('');
+  const [pageSize, setPageSize] = useState(10);
+  const [page, setPage] = useState(1);
+  useEffect(() => { setPage(1); }, [filterStatus, searchBranch, branchFilter, period, periodFrom, periodTo, pageSize]);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -48,9 +58,19 @@ export function AuditorDashboard() {
 
   const flaggedCashUps = reconciliations.filter(r => r.status === 'FLAGGED' || Math.abs(r.varianceUsd) > 50);
 
+  const periodRange = getPeriodRange(period, periodFrom, periodTo);
   const filteredRecon = reconciliations
     .filter(r => filterStatus === 'ALL' ? true : r.status === filterStatus)
+    .filter(r => branchFilter === 'ALL' || r.branchId === branchFilter)
+    .filter(r => {
+      const q = searchBranch.trim().toLowerCase();
+      if (!q) return true;
+      return ((branches || []).find(b => b.id === r.branchId)?.name || r.branchId || '').toLowerCase().includes(q);
+    })
+    .filter(r => inRange(r.date, periodRange))
     .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const reconView = paginate<any>(filteredRecon, page, pageSize);
+  const auditFiltersActive = filterStatus !== 'ALL' || !!searchBranch || branchFilter !== 'ALL' || period !== 'ALL';
 
 
   const markAsFlagged = async (id: string) => {
@@ -133,6 +153,36 @@ export function AuditorDashboard() {
           </select>
         </div>
 
+        <div className="px-4 py-3 border-b border-[#1e345e] bg-[#061121]/60 flex flex-wrap items-end gap-3">
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Search</label>
+            <input type="text" value={searchBranch} onChange={e => setSearchBranch(e.target.value)} placeholder="Branch name..." className="bg-[#112240] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500 placeholder:text-slate-500" />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Branch</label>
+            <select value={branchFilter} onChange={e => setBranchFilter(e.target.value)} className="bg-[#112240] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+              <option value="ALL">All Branches</option>
+              {(branches || []).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Period</label>
+            <select value={period} onChange={e => setPeriod(e.target.value as Period)} className="bg-[#112240] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+              {PERIOD_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+          {period === 'CUSTOM' && (
+            <>
+              <div><label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">From</label><input type="date" value={periodFrom} onChange={e => setPeriodFrom(e.target.value)} className="bg-[#112240] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500" /></div>
+              <div><label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">To</label><input type="date" value={periodTo} onChange={e => setPeriodTo(e.target.value)} className="bg-[#112240] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500" /></div>
+            </>
+          )}
+          <div><label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Rows</label><select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }} className="bg-[#112240] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500">{[5, 10, 25, 50].map(n => <option key={n} value={n}>{n} / page</option>)}</select></div>
+          {auditFiltersActive && (
+            <button onClick={() => { setFilterStatus('ALL'); setSearchBranch(''); setBranchFilter('ALL'); setPeriod('ALL'); setPeriodFrom(''); setPeriodTo(''); }} className="text-xs text-slate-400 hover:text-white px-3 py-2 border border-[#1e345e] rounded-lg transition-colors">Clear filters</button>
+          )}
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm whitespace-nowrap">
             <thead className="bg-[#112240] text-slate-400 border-b border-[#1e345e]">
@@ -148,7 +198,7 @@ export function AuditorDashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#1e345e]">
-              {filteredRecon.map(r => (
+              {reconView.pageItems.map(r => (
                 <React.Fragment key={r.id}>
                   <tr className={clsx("hover:bg-[#112240]/50 transition-colors cursor-pointer")} onClick={() => setViewingRecon(r)}>
                     
@@ -231,6 +281,9 @@ export function AuditorDashboard() {
               )}
             </tbody>
           </table>
+        </div>
+        <div className="px-4 pb-4">
+          <PaginationBar page={reconView.currentPage} totalPages={reconView.totalPages} totalItems={filteredRecon.length} pageSize={pageSize} onPageChange={setPage} />
         </div>
       
         

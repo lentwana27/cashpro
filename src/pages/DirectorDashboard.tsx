@@ -13,6 +13,7 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { ReconModal } from '../components/ReconModal';
+import { PaginationBar, paginate } from '../components/PaginationBar';
 import { AmendmentStagePills, isAmendmentStatus } from '../components/AmendmentStagePills';
 
 export function DirectorDashboard() {
@@ -25,6 +26,13 @@ export function DirectorDashboard() {
   const [selectedBranchFilter, setSelectedBranchFilter] = useState<string | null>(null);
   const [viewReconId, setViewReconId] = useState<string | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [recentStatus, setRecentStatus] = useState('ALL');
+  const [recentPageSize, setRecentPageSize] = useState(10);
+  const [recentPage, setRecentPage] = useState(1);
+  const [branchPage, setBranchPage] = useState(1);
+  const BRANCH_PAGE_SIZE = 5;
+  useEffect(() => { setRecentPage(1); }, [recentStatus, recentPageSize, filterType, filterValue, selectedBranchFilter]);
+  useEffect(() => { setBranchPage(1); }, [filterType, filterValue]);
   const tableRef = React.useRef<HTMLDivElement>(null);
   
   const loadData = React.useCallback(async () => {
@@ -142,7 +150,11 @@ export function DirectorDashboard() {
   const sortedReconciliations = [...filteredReconciliations]
     .filter(r => !selectedBranchFilter || r.branchId === selectedBranchFilter)
     .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
+  const recentFiltered = sortedReconciliations.filter(r =>
+    recentStatus === 'ALL' || (recentStatus === 'AMENDMENT' ? isAmendmentStatus(r.status) : r.status === recentStatus)
+  );
+  const recentView = paginate<any>(recentFiltered, recentPage, recentPageSize);
+  const branchView = paginate<typeof branchAggregates[number]>(branchAggregates, branchPage, BRANCH_PAGE_SIZE);
 
   const handleBranchClick = (branchId: string) => {
     if (selectedBranchFilter === branchId) {
@@ -346,10 +358,10 @@ export function DirectorDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#1e345e]">
-                {branchAggregates.map((b, i) => (
+                {branchView.pageItems.map((b, i) => (
                   <tr key={b.branchId} className="hover:bg-[#112240]/50 transition-colors">
                     <td className="px-4 py-3 font-medium text-white">{b.name}</td>
-                    <td className="px-4 py-3 text-right text-slate-400">#{i + 1}</td>
+                    <td className="px-4 py-3 text-right text-slate-400">#{(branchView.currentPage - 1) * BRANCH_PAGE_SIZE + i + 1}</td>
                     <td className="px-4 py-3 text-right font-mono">${(b.sales || 0).toFixed(2)}</td>
                     <td className="px-4 py-3 text-right font-mono">
                       <span className={clsx(b.variance > 0 ? "text-emerald-400" : b.variance < 0 ? "text-rose-400" : "text-blue-400")}>
@@ -369,6 +381,7 @@ export function DirectorDashboard() {
               </tbody>
             </table>
           </div>
+          <PaginationBar page={branchView.currentPage} totalPages={branchView.totalPages} totalItems={branchAggregates.length} pageSize={BRANCH_PAGE_SIZE} onPageChange={setBranchPage} />
         </div>
         
         <div className="lg:col-span-2">
@@ -376,7 +389,22 @@ export function DirectorDashboard() {
         </div>
 
         <div ref={tableRef} className="bg-[#0a192f] border border-[#1e345e] rounded-xl p-4 sm:p-6 shadow-xl lg:col-span-2">
-          <h2 className="text-lg font-semibold text-white mb-6">Recent Cash-Up Submissions</h2>
+          <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
+            <h2 className="text-lg font-semibold text-white">Recent Cash-Up Submissions</h2>
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Status</label>
+                <select value={recentStatus} onChange={e => setRecentStatus(e.target.value)} className="bg-[#112240] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+                  <option value="ALL">All Statuses</option>
+                  <option value="PENDING">Pending</option>
+                  <option value="AMENDMENT">Amendment (any stage)</option>
+                  <option value="APPROVED">Approved</option>
+                  <option value="FLAGGED">Flagged</option>
+                </select>
+              </div>
+              <div><label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Rows</label><select value={recentPageSize} onChange={e => { setRecentPageSize(Number(e.target.value)); setRecentPage(1); }} className="bg-[#112240] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500">{[5, 10, 25, 50].map(n => <option key={n} value={n}>{n} / page</option>)}</select></div>
+            </div>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm whitespace-nowrap">
               <thead className="bg-[#061121] text-slate-400">
@@ -391,7 +419,7 @@ export function DirectorDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#1e345e]">
-                {sortedReconciliations.map(r => (
+                {recentView.pageItems.map(r => (
                   <React.Fragment key={r.id}>
                     <tr onClick={() => setViewReconId(r.id)} className="hover:bg-[#112240] transition-colors cursor-pointer group">
                       <td className="px-4 py-3">
@@ -437,6 +465,7 @@ export function DirectorDashboard() {
               </tbody>
             </table>
           </div>
+          <PaginationBar page={recentView.currentPage} totalPages={recentView.totalPages} totalItems={recentFiltered.length} pageSize={recentPageSize} onPageChange={setRecentPage} />
         </div>
       </div>
       <ExportReportModal 

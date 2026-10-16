@@ -6,7 +6,7 @@ import { Users, Building2, Megaphone, CheckCircle, ShieldCheck, MapPin, Edit3, X
 import { ExchangeRatesModal } from '../components/ExchangeRatesModal';
 import clsx from 'clsx';
 import { format } from 'date-fns';
-import { PaginationBar } from '../components/PaginationBar';
+import { PaginationBar, paginate } from '../components/PaginationBar';
 import { Period, getPeriodRange, inRange } from '../lib/period';
 
 type UnlockPeriod = Period;
@@ -36,6 +36,21 @@ export function AdminDashboard() {
 
   const [logDateFilter, setLogDateFilter] = useState('');
   const [logSuspiciousOnly, setLogSuspiciousOnly] = useState(false);
+  const [logSearch, setLogSearch] = useState('');
+  const [logPage, setLogPage] = useState(1);
+  const LOG_PAGE_SIZE = 25;
+  const [userSearch, setUserSearch] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState('ALL');
+  const [userStatusFilter, setUserStatusFilter] = useState('ALL');
+  const [userPage, setUserPage] = useState(1);
+  const USER_PAGE_SIZE = 8;
+  const [branchSearch, setBranchSearch] = useState('');
+  const [branchStatusFilter, setBranchStatusFilter] = useState('ALL');
+  const [branchPage, setBranchPage] = useState(1);
+  const BRANCH_PAGE_SIZE = 8;
+  useEffect(() => { setLogPage(1); }, [logDateFilter, logSuspiciousOnly, logSearch]);
+  useEffect(() => { setUserPage(1); }, [userSearch, userRoleFilter, userStatusFilter]);
+  useEffect(() => { setBranchPage(1); }, [branchSearch, branchStatusFilter]);
 
   const [rates, setRates] = useState<any[]>([]);
   const [showRates, setShowRates] = useState(false);
@@ -199,8 +214,32 @@ export function AdminDashboard() {
   const filteredLogs = logs.filter(log => {
     if (logDateFilter && !log.timestamp.startsWith(logDateFilter)) return false;
     if (logSuspiciousOnly && !isSuspicious(log)) return false;
+    const q = logSearch.trim().toLowerCase();
+    if (q && !`${log.userName} ${log.action} ${log.details}`.toLowerCase().includes(q)) return false;
     return true;
   });
+  const logView = paginate<SystemLog>(filteredLogs, logPage, LOG_PAGE_SIZE);
+
+  const filteredUsers = users.filter(u => {
+    const q = userSearch.trim().toLowerCase();
+    if (q && !`${u.name} ${u.email}`.toLowerCase().includes(q)) return false;
+    if (userRoleFilter !== 'ALL' && u.role !== userRoleFilter) return false;
+    if (userStatusFilter === 'ACTIVE' && !u.active) return false;
+    if (userStatusFilter === 'PENDING' && u.active) return false;
+    if (userStatusFilter === 'ONLINE' && !u.isOnline) return false;
+    return true;
+  });
+  const userView = paginate<User>(filteredUsers, userPage, USER_PAGE_SIZE);
+  const userRoles = Array.from(new Set<string>(users.map(u => u.role as string)));
+
+  const filteredBranchList = branches.filter(b => {
+    const q = branchSearch.trim().toLowerCase();
+    if (q && !`${b.name} ${b.code} ${b.location}`.toLowerCase().includes(q)) return false;
+    if (branchStatusFilter === 'ACTIVE' && !b.active) return false;
+    if (branchStatusFilter === 'INACTIVE' && b.active) return false;
+    return true;
+  });
+  const branchView = paginate<Branch>(filteredBranchList, branchPage, BRANCH_PAGE_SIZE);
 
   return (
     <div className="space-y-8">
@@ -235,9 +274,23 @@ export function AdminDashboard() {
           <div className="p-4 sm:p-6 border-b border-[#1e345e] flex items-center gap-3">
             <Users className="text-emerald-400 w-5 h-5" />
             <h2 className="text-xl font-bold text-white">User Access Management</h2>
+            <span className="ml-auto text-xs font-mono text-slate-400">{filteredUsers.length}/{users.length}</span>
+          </div>
+          <div className="px-4 py-3 border-b border-[#1e345e] bg-[#061121]/60 flex flex-wrap gap-2">
+            <input type="text" value={userSearch} onChange={e => setUserSearch(e.target.value)} placeholder="Search name or email..." className="flex-1 min-w-[10rem] bg-[#112240] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500 placeholder:text-slate-500" />
+            <select value={userRoleFilter} onChange={e => setUserRoleFilter(e.target.value)} className="bg-[#112240] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+              <option value="ALL">All Roles</option>
+              {userRoles.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+            <select value={userStatusFilter} onChange={e => setUserStatusFilter(e.target.value)} className="bg-[#112240] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+              <option value="ALL">All Statuses</option>
+              <option value="ACTIVE">Active</option>
+              <option value="PENDING">Pending approval</option>
+              <option value="ONLINE">Online</option>
+            </select>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {users.map(u => (
+            {userView.pageItems.map(u => (
               <div key={u.id} className="bg-[#112240] border border-[#1e345e] p-4 rounded-xl flex items-center justify-between hover:border-[#2a457e] transition-colors relative">
                 <div>
                   <div className="font-semibold text-white text-sm flex items-center gap-2">
@@ -289,6 +342,9 @@ export function AdminDashboard() {
               </div>
             ))}
           </div>
+          <div className="px-4 pb-4 border-t border-[#1e345e]">
+            <PaginationBar page={userView.currentPage} totalPages={userView.totalPages} totalItems={filteredUsers.length} pageSize={USER_PAGE_SIZE} onPageChange={setUserPage} />
+          </div>
         </div>
 
         {/* BRANCHES PANEL */}
@@ -305,8 +361,16 @@ export function AdminDashboard() {
               <Plus className="w-4 h-4" /> New Branch
             </button>
           </div>
+          <div className="px-4 py-3 border-b border-[#1e345e] bg-[#061121]/60 flex flex-wrap gap-2">
+            <input type="text" value={branchSearch} onChange={e => setBranchSearch(e.target.value)} placeholder="Search name, code or location..." className="flex-1 min-w-[10rem] bg-[#112240] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500 placeholder:text-slate-500" />
+            <select value={branchStatusFilter} onChange={e => setBranchStatusFilter(e.target.value)} className="bg-[#112240] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+              <option value="ALL">All Statuses</option>
+              <option value="ACTIVE">Active</option>
+              <option value="INACTIVE">Inactive</option>
+            </select>
+          </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
-             {branches.map(b => (
+             {branchView.pageItems.map(b => (
               <div key={b.id} className="bg-[#112240] border border-[#1e345e] p-4 rounded-xl flex items-center justify-between hover:border-[#2a457e] transition-colors group">
                  <div>
                     <div className="font-bold text-white text-base">{b.name}</div>
@@ -323,6 +387,9 @@ export function AdminDashboard() {
                  </div>
               </div>
             ))}
+          </div>
+          <div className="px-4 pb-4 border-t border-[#1e345e]">
+            <PaginationBar page={branchView.currentPage} totalPages={branchView.totalPages} totalItems={filteredBranchList.length} pageSize={BRANCH_PAGE_SIZE} onPageChange={setBranchPage} />
           </div>
         </div>
 
@@ -481,9 +548,10 @@ export function AdminDashboard() {
                 </button>
               )}
             </div>
+            <input type="text" value={logSearch} onChange={e => setLogSearch(e.target.value)} placeholder="Search user, action, details..." className="bg-[#112240] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500 placeholder:text-slate-500 w-56" />
             <label className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white transition-colors">
-              <input 
-                type="checkbox" 
+              <input
+                type="checkbox"
                 checked={logSuspiciousOnly}
                 onChange={e => setLogSuspiciousOnly(e.target.checked)}
                 className="w-4 h-4 text-emerald-500 bg-[#061121] border-[#1e345e] rounded focus:ring-emerald-500"
@@ -503,7 +571,7 @@ export function AdminDashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#1e345e]">
-              {filteredLogs.map(log => (
+              {logView.pageItems.map(log => (
                 <tr key={log.id} className="hover:bg-[#112240]/50 transition-colors">
                   <td className="px-4 py-3 font-mono text-xs whitespace-nowrap text-slate-400">
                     {safeFormat(log.timestamp || new Date(), 'yyyy-MM-dd HH:mm:ss')}
@@ -532,6 +600,7 @@ export function AdminDashboard() {
             <div className="text-center text-slate-500 py-8">No recent activity.</div>
           )}
         </div>
+        <PaginationBar page={logView.currentPage} totalPages={logView.totalPages} totalItems={filteredLogs.length} pageSize={LOG_PAGE_SIZE} onPageChange={setLogPage} />
       </div>
 
       

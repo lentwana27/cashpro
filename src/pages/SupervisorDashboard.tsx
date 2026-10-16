@@ -20,6 +20,8 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import clsx from "clsx";
 import { AmendmentStagePills, isAmendmentStatus } from "../components/AmendmentStagePills";
+import { PaginationBar, paginate } from "../components/PaginationBar";
+import { Period, PERIOD_OPTIONS, getPeriodRange, inRange } from "../lib/period";
 
 export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: string }) {
   const { user } = useAuth();
@@ -27,6 +29,19 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
   const [date, setDate] = useState(safeFormat(new Date(), "yyyy-MM-dd"));
   const [submitted, setSubmitted] = useState<DailyReconciliation | null>(null);
   const [history, setHistory] = useState<DailyReconciliation[]>([]);
+  const [histStatus, setHistStatus] = useState('ALL');
+  const [histPeriod, setHistPeriod] = useState<Period>('ALL');
+  const [histFrom, setHistFrom] = useState('');
+  const [histTo, setHistTo] = useState('');
+  const [histPageSize, setHistPageSize] = useState(10);
+  const [histPage, setHistPage] = useState(1);
+  useEffect(() => { setHistPage(1); }, [histStatus, histPeriod, histFrom, histTo, histPageSize]);
+  const histRange = getPeriodRange(histPeriod, histFrom, histTo);
+  const histFiltered = history
+    .filter(r => histStatus === 'ALL' || (histStatus === 'AMENDMENT' ? isAmendmentStatus(r.status) : histStatus === 'UNLOCK' ? String(r.status).startsWith('UNLOCK') : r.status === histStatus))
+    .filter(r => inRange(r.date, histRange));
+  const histView = paginate<any>(histFiltered, histPage, histPageSize);
+  const histFiltersActive = histStatus !== 'ALL' || histPeriod !== 'ALL';
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [branch, setBranch] = useState<any>(null);
   const [branches, setBranches] = useState<any[]>([]);
@@ -547,6 +562,35 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
             Submission History
           </h2>
         </div>
+        <div className="px-6 py-3 border-b border-[#1e345e] bg-[#061121]/60 flex flex-wrap items-end gap-3">
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Status</label>
+            <select value={histStatus} onChange={e => setHistStatus(e.target.value)} className="bg-[#112240] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+              <option value="ALL">All Statuses</option>
+              <option value="PENDING">Pending</option>
+              <option value="AMENDMENT">Amendment (any stage)</option>
+              <option value="UNLOCK">Unlock requests</option>
+              <option value="APPROVED">Approved</option>
+              <option value="FLAGGED">Flagged</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Period</label>
+            <select value={histPeriod} onChange={e => setHistPeriod(e.target.value as Period)} className="bg-[#112240] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+              {PERIOD_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+          {histPeriod === 'CUSTOM' && (
+            <>
+              <div><label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">From</label><input type="date" value={histFrom} onChange={e => setHistFrom(e.target.value)} className="bg-[#112240] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500" /></div>
+              <div><label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">To</label><input type="date" value={histTo} onChange={e => setHistTo(e.target.value)} className="bg-[#112240] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500" /></div>
+            </>
+          )}
+          <div><label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Rows</label><select value={histPageSize} onChange={e => { setHistPageSize(Number(e.target.value)); setHistPage(1); }} className="bg-[#112240] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500">{[5, 10, 25, 50].map(n => <option key={n} value={n}>{n} / page</option>)}</select></div>
+          {histFiltersActive && (
+            <button onClick={() => { setHistStatus('ALL'); setHistPeriod('ALL'); setHistFrom(''); setHistTo(''); }} className="text-xs text-slate-400 hover:text-white px-3 py-2 border border-[#1e345e] rounded-lg transition-colors">Clear filters</button>
+          )}
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm whitespace-nowrap">
             <thead className="bg-[#061121] text-slate-400">
@@ -565,7 +609,7 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
               </tr>
             </thead>
             <tbody className="divide-y divide-[#1e345e]">
-              {history.map((r) => (
+              {histView.pageItems.map((r) => (
                 <React.Fragment key={r.id}>
                 <tr
                   key={r.id}
@@ -750,7 +794,7 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
                   </AnimatePresence>
                 </React.Fragment>
               ))}
-              {history.length === 0 && (
+              {histFiltered.length === 0 && (
                 <tr>
                   <td
                     colSpan={5}
@@ -762,6 +806,9 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
               )}
             </tbody>
           </table>
+        </div>
+        <div className="px-6 pb-4">
+          <PaginationBar page={histView.currentPage} totalPages={histView.totalPages} totalItems={histFiltered.length} pageSize={histPageSize} onPageChange={setHistPage} />
         </div>
       </div>
       

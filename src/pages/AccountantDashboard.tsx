@@ -12,6 +12,7 @@ import { ExchangeRatesModal } from '../components/ExchangeRatesModal';
 import { AmendmentStagePills, isAmendmentStatus } from '../components/AmendmentStagePills';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../components/AuthProvider';
+import { PaginationBar, paginate } from '../components/PaginationBar';
 
 export function AccountantDashboard() {
   const { user } = useAuth();
@@ -22,6 +23,9 @@ export function AccountantDashboard() {
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [searchBranch, setSearchBranch] = useState('');
   const [filterDate, setFilterDate] = useState('');
+  const [pageSize, setPageSize] = useState(10);
+  const [page, setPage] = useState(1);
+  useEffect(() => { setPage(1); }, [searchBranch, filterDate, filterStatus, pageSize]);
   
   const [sortField, setSortField] = useState<'branchId' | 'date'>('date');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -98,6 +102,7 @@ export function AccountantDashboard() {
           : b.branchId.localeCompare(a.branchId);
       }
     });
+  const reconView = paginate<any>(filteredRecon, page, pageSize);
   const missingReconciliations = React.useMemo(() => {
     const missing: { branchName: string; date: string }[] = [];
     const today = new Date();
@@ -199,6 +204,10 @@ export function AccountantDashboard() {
             <option value="FLAGGED">Flagged</option>
           </select>
           
+          <select value={pageSize} onChange={e => setPageSize(Number(e.target.value))} className="px-4 py-2 bg-[#061121] border border-[#1e345e] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 text-white appearance-none">
+            {[5, 10, 25, 50].map(n => <option key={n} value={n}>{n} / page</option>)}
+          </select>
+
           {(searchBranch || filterDate !== safeFormat(new Date(), 'yyyy-MM-dd') || filterStatus !== 'ALL') && (
             <button 
               onClick={() => { setSearchBranch(''); setFilterDate(safeFormat(new Date(), 'yyyy-MM-dd')); setFilterStatus('ALL'); }}
@@ -228,7 +237,7 @@ export function AccountantDashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#1e345e]">
-              {filteredRecon.map(r => (
+              {reconView.pageItems.map(r => (
                 <React.Fragment key={r.id}>
                   <tr className={clsx("transition-colors cursor-pointer hover:bg-[#112240]/50")} onClick={() => setViewingRecon(r)}>
                     
@@ -301,6 +310,9 @@ export function AccountantDashboard() {
               No reconciliations found matching filters.
             </div>
           )}
+          <div className="px-4 sm:px-6 pb-4">
+            <PaginationBar page={reconView.currentPage} totalPages={reconView.totalPages} totalItems={filteredRecon.length} pageSize={pageSize} onPageChange={setPage} />
+          </div>
         </div>
       </div>
 
