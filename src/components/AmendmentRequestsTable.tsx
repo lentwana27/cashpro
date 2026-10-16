@@ -39,8 +39,8 @@ export function AmendmentRequestsTable({
   users: any[];
   onView: (recon: any) => void;
   onApprove: (id: string) => void;
-  /** The stage the current role can approve; the Approve button only shows on rows at this stage. */
-  approvableStatus?: string;
+  /** The stage(s) the current role can approve; the Approve button only shows on rows at these stages. */
+  approvableStatus?: string | string[];
 }) {
   const [stage, setStage] = useState('ALL');
   const [branchFilter, setBranchFilter] = useState('ALL');
@@ -175,7 +175,7 @@ export function AmendmentRequestsTable({
                     <td className="px-4 py-3 text-center"><AmendmentStagePills status={r.status} className="justify-center" /></td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       <button onClick={e => { e.stopPropagation(); onView(r); }} className="px-3 py-1.5 bg-[#112240] border border-[#1e345e] text-slate-300 hover:text-white rounded text-xs font-bold transition-colors">Review</button>
-                      {r.status === approvableStatus && (
+                      {(Array.isArray(approvableStatus) ? approvableStatus : [approvableStatus]).includes(r.status) && (
                         <button onClick={e => { e.stopPropagation(); onApprove(r.id); }} className="ml-2 px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-400 rounded text-xs font-bold transition-colors">Approve</button>
                       )}
                     </td>

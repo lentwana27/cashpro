@@ -4,6 +4,8 @@ import { api } from '../lib/api';
 import { User, Branch, SystemLog } from '../lib/types';
 import { Users, Building2, Megaphone, CheckCircle, ShieldCheck, MapPin, Edit3, X, Download, Database, Activity, Plus, Trash2, Settings } from 'lucide-react';
 import { ExchangeRatesModal } from '../components/ExchangeRatesModal';
+import { ReconModal } from '../components/ReconModal';
+import { AmendmentRequestsTable } from '../components/AmendmentRequestsTable';
 import clsx from 'clsx';
 import { format } from 'date-fns';
 import { PaginationBar, paginate } from '../components/PaginationBar';
@@ -18,6 +20,8 @@ export function AdminDashboard() {
   const [logs, setLogs] = useState<SystemLog[]>([]);
 
   const [updates, setUpdates] = useState<any[]>([]);
+  const [tab, setTab] = useState<'overview' | 'amendments'>('overview');
+  const [viewRecon, setViewRecon] = useState<any>(null);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [editingUpdate, setEditingUpdate] = useState<any>(null);
   const [updateForm, setUpdateForm] = useState({ title: '', features: '', targetRoles: [] as string[] });
@@ -116,6 +120,17 @@ export function AdminDashboard() {
     } catch (e: any) {
       alert(e.message || 'Failed to delete user');
     }
+  };
+
+  // Admins can approve an amendment at any stage; the server validates the role against the current stage.
+  const approveAmendment = async (id: string) => {
+    try {
+      await api.put(`/reconciliations/${id}/amendment-approve`, {});
+    } catch (e) {
+      console.error(e);
+      alert('Failed to approve amendment. It may have already moved to the next stage.');
+    }
+    loadData();
   };
 
   const approveUser = async (id: string) => {
@@ -285,6 +300,40 @@ export function AdminDashboard() {
         <ExchangeRatesModal rates={rates} onClose={() => setShowRates(false)} onUpdate={loadData} />
       )}
 
+      <div className="flex gap-1 border-b border-[#1e345e]">
+        {([
+          { id: 'overview', label: 'System Overview', count: null as number | null },
+          { id: 'amendments', label: 'Amendment Requests', count: reconciliations.filter((r: any) => ['AMENDMENT_REQUESTED', 'AMENDMENT_PENDING_HEAD_ACCOUNTANT', 'AMENDMENT_PENDING_DIRECTOR'].includes(r.status)).length },
+        ] as const).map(t => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={clsx(
+              'flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
+              tab === t.id ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-white'
+            )}
+          >
+            {t.label}
+            {t.count !== null && t.count > 0 && (
+              <span className="text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 rounded-full px-2 py-0.5" title="Amendments in progress">{t.count}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'amendments' && (
+        <AmendmentRequestsTable
+          reconciliations={reconciliations}
+          branches={branches}
+          users={users}
+          onView={setViewRecon}
+          onApprove={approveAmendment}
+          approvableStatus={['AMENDMENT_REQUESTED', 'AMENDMENT_PENDING_HEAD_ACCOUNTANT', 'AMENDMENT_PENDING_DIRECTOR']}
+        />
+      )}
+      {viewRecon && <ReconModal recon={viewRecon} onClose={() => setViewRecon(null)} />}
+
+      {tab === 'overview' && (<>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         
         {/* USERS PANEL */}
@@ -720,6 +769,8 @@ export function AdminDashboard() {
       </div>
 
       
+      </>)}
+
       {/* UPDATE MODAL */}
       {showUpdateModal && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm">
