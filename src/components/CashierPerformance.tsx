@@ -5,10 +5,14 @@ import { CashierHistoryModal } from './CashierHistoryModal';
 import { Branch } from '../lib/types';
 import { useState } from 'react';
 import clsx from 'clsx';
+import { PaginationBar, paginate } from './PaginationBar';
 
 export function CashierPerformance({ reconciliations, branches }: { reconciliations: DailyReconciliation[], branches: Branch[] }) {
   const [selectedCashier, setSelectedCashier] = useState<{id: string, name: string} | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [resultFilter, setResultFilter] = useState<'ALL' | 'SHORT' | 'OVER' | 'BALANCED'>('ALL');
+  const [pageSize, setPageSize] = useState(10);
+  const [page, setPage] = useState(1);
   const cashierStats = useMemo(() => {
     const stats: Record<string, { id: string, name: string, branchName: string, sales: number, cash: number, variance: number, totalOvers: number, totalUnders: number, counts: number }> = {};
     
@@ -37,21 +41,38 @@ export function CashierPerformance({ reconciliations, branches }: { reconciliati
 
   if (cashierStats.length === 0) return null;
 
+  const visible = cashierStats
+    .filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()))
+    .filter(c => resultFilter === 'ALL' || (resultFilter === 'SHORT' ? c.totalUnders < 0 : resultFilter === 'OVER' ? c.totalOvers > 0 : c.totalUnders === 0 && c.totalOvers === 0));
+  const view = paginate<typeof cashierStats[number]>(visible, page, pageSize);
+  const selCls = 'bg-[#112240] border border-[#1e345e] rounded-lg py-1.5 px-3 text-white text-sm focus:outline-none focus:border-blue-500';
+
   return (
     <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl shadow-xl overflow-hidden mt-6">
-      <div className="p-4 sm:p-6 border-b border-[#1e345e] bg-[#061121] flex justify-between items-center">
+      <div className="p-4 sm:p-6 border-b border-[#1e345e] bg-[#061121] flex flex-wrap gap-3 justify-between items-center">
         <h2 className="text-lg font-bold text-white flex items-center gap-2">
           <Users className="w-5 h-5 text-indigo-400" /> Cashier Performance (Shortages per Till Operator)
         </h2>
+        <div className="flex flex-wrap items-center gap-2">
+        <select value={resultFilter} onChange={e => { setResultFilter(e.target.value as any); setPage(1); }} className={selCls}>
+          <option value="ALL">All Results</option>
+          <option value="SHORT">With Shortages</option>
+          <option value="OVER">With Overs</option>
+          <option value="BALANCED">Fully Balanced</option>
+        </select>
+        <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }} className={selCls}>
+          {[5, 10, 25, 50].map(n => <option key={n} value={n}>{n} / page</option>)}
+        </select>
         <div className="relative">
           <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
           <input
             type="text"
             placeholder="Search operator..."
             value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
+            onChange={e => { setSearchTerm(e.target.value); setPage(1); }}
             className="bg-[#112240] border border-[#1e345e] rounded-lg py-1.5 pl-9 pr-4 text-white text-sm focus:outline-none focus:border-blue-500 w-48 sm:w-64"
           />
+        </div>
         </div>
       </div>
       <div className="p-0">
@@ -70,8 +91,8 @@ export function CashierPerformance({ reconciliations, branches }: { reconciliati
               </tr>
             </thead>
             <tbody className="divide-y divide-[#1e345e]">
-              {cashierStats.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase())).map((c, idx) => (
-                <tr key={idx} className="hover:bg-[#1e345e] transition-colors cursor-pointer" onClick={() => setSelectedCashier({ id: c.id, name: c.name })}>
+              {view.pageItems.map((c, idx) => (
+                <tr key={c.id} className="hover:bg-[#1e345e] transition-colors cursor-pointer" onClick={() => setSelectedCashier({ id: c.id, name: c.name })}>
 
                   <td className="px-6 py-4 font-bold text-white">{c.name}</td>
                   <td className="px-6 py-4 text-slate-300">{c.branchName}</td>
@@ -88,8 +109,14 @@ export function CashierPerformance({ reconciliations, branches }: { reconciliati
                   
                 </tr>
               ))}
+              {visible.length === 0 && (
+                <tr><td colSpan={7} className="px-6 py-8 text-center text-slate-500">No operators match the filters.</td></tr>
+              )}
             </tbody>
           </table>
+        </div>
+        <div className="px-4 sm:px-6 pb-4">
+          <PaginationBar page={view.currentPage} totalPages={view.totalPages} totalItems={visible.length} pageSize={pageSize} onPageChange={setPage} />
         </div>
       </div>
       {selectedCashier && (
