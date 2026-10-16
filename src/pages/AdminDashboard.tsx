@@ -2,10 +2,42 @@ import { safeFormat } from '../lib/formatDate';
 import { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { User, Branch, SystemLog } from '../lib/types';
-import { Users, Building2, Megaphone, CheckCircle, ShieldCheck, MapPin, Edit3, X, Download, Database, Activity, Plus, Trash2, Settings } from 'lucide-react';
+import { Users, Building2, Megaphone, CheckCircle, ShieldCheck, MapPin, Edit3, X, Download, Database, Activity, Plus, Trash2, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ExchangeRatesModal } from '../components/ExchangeRatesModal';
 import clsx from 'clsx';
-import { format } from 'date-fns';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+
+type UnlockPeriod = 'ALL' | 'TODAY' | 'WEEK' | 'MONTH' | 'CUSTOM';
+
+function PaginationBar({ page, totalPages, totalItems, pageSize, onPageChange }: { page: number; totalPages: number; totalItems: number; pageSize: number; onPageChange: (p: number) => void }) {
+  if (totalItems === 0) return null;
+  const from = (page - 1) * pageSize + 1;
+  const to = Math.min(page * pageSize, totalItems);
+  return (
+    <div className="flex items-center justify-between mt-4 text-xs text-slate-400">
+      <span>Showing {from}-{to} of {totalItems}</span>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => onPageChange(page - 1)}
+          disabled={page <= 1}
+          className="p-1.5 rounded border border-[#1e345e] bg-[#112240] hover:bg-[#1a2d53] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          aria-label="Previous page"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+        <span className="font-mono">Page {page} / {totalPages}</span>
+        <button
+          onClick={() => onPageChange(page + 1)}
+          disabled={page >= totalPages}
+          className="p-1.5 rounded border border-[#1e345e] bg-[#112240] hover:bg-[#1a2d53] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          aria-label="Next page"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export function AdminDashboard() {
   const [users, setUsers] = useState<User[]>([]);
@@ -35,6 +67,14 @@ export function AdminDashboard() {
 
   const [rates, setRates] = useState<any[]>([]);
   const [showRates, setShowRates] = useState(false);
+
+  const [unlockBranchFilter, setUnlockBranchFilter] = useState('ALL');
+  const [unlockPeriod, setUnlockPeriod] = useState<UnlockPeriod>('ALL');
+  const [unlockFrom, setUnlockFrom] = useState('');
+  const [unlockTo, setUnlockTo] = useState('');
+  const [unlockPageSize, setUnlockPageSize] = useState(6);
+  const [pendingPage, setPendingPage] = useState(1);
+  const [lockedPage, setLockedPage] = useState(1);
 
   useEffect(() => {
     loadData();
@@ -162,6 +202,37 @@ export function AdminDashboard() {
            (actionUpper.includes('PUT') && actionUpper.includes('/USERS')) ||
            detailsUpper.includes('FALSE');
   };
+
+  const unlockRange = (() => {
+    const now = new Date();
+    const fmt = (d: Date) => format(d, 'yyyy-MM-dd');
+    if (unlockPeriod === 'TODAY') return { from: fmt(now), to: fmt(now) };
+    if (unlockPeriod === 'WEEK') return { from: fmt(startOfWeek(now, { weekStartsOn: 1 })), to: fmt(endOfWeek(now, { weekStartsOn: 1 })) };
+    if (unlockPeriod === 'MONTH') return { from: fmt(startOfMonth(now)), to: fmt(endOfMonth(now)) };
+    if (unlockPeriod === 'CUSTOM') return { from: unlockFrom, to: unlockTo };
+    return { from: '', to: '' };
+  })();
+
+  const matchesUnlockFilters = (r: any) => {
+    if (unlockBranchFilter !== 'ALL' && r.branchId !== unlockBranchFilter) return false;
+    if (unlockRange.from && r.date < unlockRange.from) return false;
+    if (unlockRange.to && r.date > unlockRange.to) return false;
+    return true;
+  };
+  const byDateDesc = (a: any, b: any) => (b.date || '').localeCompare(a.date || '');
+
+  const pendingUnlockAll = reconciliations.filter(r => r.status === 'UNLOCK_REQUESTED' && matchesUnlockFilters(r)).sort(byDateDesc);
+  const lockedAll = reconciliations.filter(r => r.salesConfirmed && matchesUnlockFilters(r)).sort(byDateDesc);
+
+  const pendingTotalPages = Math.max(1, Math.ceil(pendingUnlockAll.length / unlockPageSize));
+  const lockedTotalPages = Math.max(1, Math.ceil(lockedAll.length / unlockPageSize));
+  const pendingCurrentPage = Math.min(pendingPage, pendingTotalPages);
+  const lockedCurrentPage = Math.min(lockedPage, lockedTotalPages);
+  const pendingUnlockPaged = pendingUnlockAll.slice((pendingCurrentPage - 1) * unlockPageSize, pendingCurrentPage * unlockPageSize);
+  const lockedPaged = lockedAll.slice((lockedCurrentPage - 1) * unlockPageSize, lockedCurrentPage * unlockPageSize);
+
+  const resetUnlockPages = () => { setPendingPage(1); setLockedPage(1); };
+  const unlockFiltersActive = unlockBranchFilter !== 'ALL' || unlockPeriod !== 'ALL';
 
   const filteredLogs = logs.filter(log => {
     if (logDateFilter && !log.timestamp.startsWith(logDateFilter)) return false;
@@ -300,11 +371,85 @@ export function AdminDashboard() {
           <ShieldCheck className="text-rose-400 w-5 h-5" />
           <h2 className="text-xl font-bold text-white">Unlock Requests & Locked Records</h2>
         </div>
-        
-        {reconciliations.filter(r => r.status === 'UNLOCK_REQUESTED').length > 0 && (
+
+        <div className="flex flex-wrap items-end gap-3 mb-6 p-3 bg-[#061121] border border-[#1e345e] rounded-xl">
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Branch</label>
+            <select
+              value={unlockBranchFilter}
+              onChange={e => { setUnlockBranchFilter(e.target.value); resetUnlockPages(); }}
+              className="bg-[#0a192f] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500"
+            >
+              <option value="ALL">All Branches</option>
+              {[...(branches || [])].sort((a, b) => a.name.localeCompare(b.name)).map(b => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Period</label>
+            <select
+              value={unlockPeriod}
+              onChange={e => { setUnlockPeriod(e.target.value as UnlockPeriod); resetUnlockPages(); }}
+              className="bg-[#0a192f] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500"
+            >
+              <option value="ALL">All Time</option>
+              <option value="TODAY">Today</option>
+              <option value="WEEK">This Week</option>
+              <option value="MONTH">This Month</option>
+              <option value="CUSTOM">Custom Range</option>
+            </select>
+          </div>
+          {unlockPeriod === 'CUSTOM' && (
+            <>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">From</label>
+                <input
+                  type="date"
+                  value={unlockFrom}
+                  max={unlockTo || undefined}
+                  onChange={e => { setUnlockFrom(e.target.value); resetUnlockPages(); }}
+                  className="bg-[#0a192f] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">To</label>
+                <input
+                  type="date"
+                  value={unlockTo}
+                  min={unlockFrom || undefined}
+                  onChange={e => { setUnlockTo(e.target.value); resetUnlockPages(); }}
+                  className="bg-[#0a192f] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+            </>
+          )}
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Per page</label>
+            <select
+              value={unlockPageSize}
+              onChange={e => { setUnlockPageSize(Number(e.target.value)); resetUnlockPages(); }}
+              className="bg-[#0a192f] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500"
+            >
+              <option value={6}>6</option>
+              <option value={12}>12</option>
+              <option value={24}>24</option>
+            </select>
+          </div>
+          {unlockFiltersActive && (
+            <button
+              onClick={() => { setUnlockBranchFilter('ALL'); setUnlockPeriod('ALL'); setUnlockFrom(''); setUnlockTo(''); resetUnlockPages(); }}
+              className="px-3 py-1.5 text-sm text-slate-400 hover:text-white transition-colors"
+            >
+              Clear Filters
+            </button>
+          )}
+        </div>
+
+        {pendingUnlockAll.length > 0 && (
           <div className="mb-6 space-y-3">
-            <h3 className="text-sm font-bold text-amber-400 uppercase tracking-wider">Pending Missing Cash-Up Requests</h3>
-            {reconciliations.filter(r => r.status === 'UNLOCK_REQUESTED').map(r => (
+            <h3 className="text-sm font-bold text-amber-400 uppercase tracking-wider">Pending Missing Cash-Up Requests ({pendingUnlockAll.length})</h3>
+            {pendingUnlockPaged.map(r => (
               <div key={r.id} className="bg-amber-500/10 p-4 rounded-xl border border-amber-500/20 flex flex-col gap-2">
                 <div className="flex justify-between items-start">
                   <span className="font-bold text-white text-sm">{(branches || []).find(b => b.id === r.branchId)?.name || r.branchId}</span>
@@ -316,14 +461,15 @@ export function AdminDashboard() {
                 </div>
               </div>
             ))}
+            <PaginationBar page={pendingCurrentPage} totalPages={pendingTotalPages} totalItems={pendingUnlockAll.length} pageSize={unlockPageSize} onPageChange={setPendingPage} />
           </div>
         )}
-        
-        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">Locked Sales</h3>
+
+        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">Locked Sales ({lockedAll.length})</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {reconciliations.filter(r => r.salesConfirmed).map(r => (
+          {lockedPaged.map(r => (
             <div key={r.id} className="bg-[#112240] p-4 rounded-xl border border-[#1e345e] flex flex-col gap-2">
-              <div className="flex justify-between items-start">
+              <div className="flex justify-between items-start gap-2">
                 <span className="font-bold text-white text-sm">{(branches || []).find(b => b.id === r.branchId)?.name || r.branchId}</span>
                 <span className="text-xs text-slate-400">{r.date}</span>
               </div>
@@ -343,10 +489,13 @@ export function AdminDashboard() {
               </button>
             </div>
           ))}
-          {reconciliations.filter(r => r.salesConfirmed).length === 0 && (
-            <div className="col-span-full text-slate-500 text-sm py-4">No locked records needing edits.</div>
+          {lockedAll.length === 0 && (
+            <div className="col-span-full text-slate-500 text-sm py-4">
+              {unlockFiltersActive ? 'No locked records match the selected filters.' : 'No locked records needing edits.'}
+            </div>
           )}
         </div>
+        <PaginationBar page={lockedCurrentPage} totalPages={lockedTotalPages} totalItems={lockedAll.length} pageSize={unlockPageSize} onPageChange={setLockedPage} />
       </div>
 
       <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl shadow-xl flex flex-col p-4 sm:p-6">
