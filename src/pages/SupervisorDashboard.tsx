@@ -21,6 +21,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import clsx from "clsx";
 import { AmendmentStagePills, isAmendmentStatus } from "../components/AmendmentStagePills";
 import { PaginationBar, paginate } from "../components/PaginationBar";
+import { AmendmentRequestsTable } from "../components/AmendmentRequestsTable";
+import { ReconModal } from "../components/ReconModal";
 import { Period, PERIOD_OPTIONS, getPeriodRange, inRange } from "../lib/period";
 
 export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: string }) {
@@ -46,6 +48,9 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
   const [branch, setBranch] = useState<any>(null);
   const [branches, setBranches] = useState<any[]>([]);
   const [cashiers, setCashiers] = useState<any[]>([]);
+  const [branchUsers, setBranchUsers] = useState<any[]>([]);
+  const [tab, setTab] = useState<'cashup' | 'amendments'>('cashup');
+  const [viewAmendRecon, setViewAmendRecon] = useState<any>(null);
 
   const earliestReconDate = useMemo(() => {
     if (history.length === 0) return safeFormat(new Date(), "yyyy-MM-dd");
@@ -148,9 +153,11 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
       setRates(ratesData);
             try {
         const u = await api.get('/users');
+        setBranchUsers(u || []);
         setCashiers((u || []).filter((x: any) => x.role === 'CASHIER' && x.branchId === (branchIdOverride || user?.branchId)));
       } catch (e) {}
       
+      setBranches(locsData || []);
       if ((branchIdOverride || user?.branchId) && locsData)
         setBranch((locsData || []).find((b: any) => b.id === (branchIdOverride || user?.branchId)));
 
@@ -256,6 +263,10 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
     (r) => r.status === "UNLOCK_APPROVED",
   );
 
+  const amendmentsInProgress = history.filter((r: any) =>
+    ['AMENDMENT_REQUESTED', 'AMENDMENT_PENDING_HEAD_ACCOUNTANT', 'AMENDMENT_PENDING_DIRECTOR'].includes(r.status)).length;
+  const ownBranchId = branchIdOverride || user?.branchId;
+
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-[#0a192f] rounded-xl p-4 sm:p-6 border border-[#1e345e] shadow-lg gap-4">
@@ -295,6 +306,43 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
         </div>
       </div>
 
+      <div className="flex gap-1 border-b border-[#1e345e]">
+        {([
+          { id: 'cashup', label: 'Daily Cash-Up', count: null as number | null },
+          { id: 'amendments', label: 'Amendment Requests', count: amendmentsInProgress },
+        ] as const).map(t => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={clsx(
+              'flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
+              tab === t.id ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-white'
+            )}
+          >
+            {t.label}
+            {t.count !== null && t.count > 0 && (
+              <span className="text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 rounded-full px-2 py-0.5" title="Amendments in progress">{t.count}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'amendments' && (
+        <AmendmentRequestsTable
+          reconciliations={history}
+          branches={(branches || []).filter((b: any) => b.id === ownBranchId)}
+          users={branchUsers}
+          onView={setViewAmendRecon}
+          onApprove={() => {}}
+          approvableStatus="__NONE__"
+        />
+      )}
+      {viewAmendRecon && (
+        <ReconModal recon={viewAmendRecon} onClose={() => setViewAmendRecon(null)} />
+      )}
+
+      {/* Kept mounted (just hidden) so an in-progress cash-up isn't lost when switching tabs */}
+      <div className={clsx("space-y-6", tab !== 'cashup' && "hidden")}>
       {submitted && submitted.status === "UNLOCK_REQUESTED" ? (
         <div className="bg-[#0a192f] border border-amber-500/50 shadow-2xl rounded-2xl p-4 sm:p-6 md:p-8 text-center ring-1 ring-inset ring-amber-500/10">
           <div className="mx-auto w-16 h-16 bg-amber-500/20 rounded-full flex items-center justify-center mb-4 border border-amber-500/50">
@@ -817,6 +865,7 @@ export function SupervisorDashboard({ branchIdOverride }: { branchIdOverride?: s
       {history.length > 0 && (
          <CashierPerformance reconciliations={history} branches={branches} />
       )}
+      </div>
             {showAmendModal && submitted && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-[#0a192f] border border-[#1e345e] rounded-xl w-full max-w-sm p-4 sm:p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
