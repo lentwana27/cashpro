@@ -9,15 +9,24 @@ const getHeaders = () => {
   try {
     const saved = localStorage.getItem('cashup_session');
     if (saved) {
-      const { user } = JSON.parse(saved);
-      if (user) {
-        headers['x-user-id'] = user.id;
-        headers['x-user-name'] = user.name;
-      }
+      const { token } = JSON.parse(saved);
+      // The server identifies the caller from this signed token only.
+      if (token) headers['Authorization'] = `Bearer ${token}`;
     }
   } catch(e) {}
   return headers;
 };
+
+// A 401 on a normal request means the session is missing, expired or from before signed
+// sessions existed: clear it and send the user to the login page (once).
+let redirectingToLogin = false;
+function handleUnauthorized(res: Response, endpoint: string) {
+  if (res.status === 401 && !endpoint.startsWith('/auth/') && !redirectingToLogin) {
+    redirectingToLogin = true;
+    try { localStorage.removeItem('cashup_session'); } catch (e) {}
+    window.location.href = '/login';
+  }
+}
 
 export const api = {
   async delete(endpoint: string, body?: any) {
@@ -28,6 +37,7 @@ export const api = {
     });
     
     if (!res.ok) {
+      handleUnauthorized(res, endpoint);
       let msg = 'Server error';
       try {
         const data = await res.json();
@@ -42,6 +52,7 @@ export const api = {
   async get(endpoint: string) {
     const res = await fetch(`${API_BASE}${endpoint}`, { headers: getHeaders() });
     if (!res.ok) {
+      handleUnauthorized(res, endpoint);
       const text = await res.text();
       let err;
       try { err = JSON.parse(text); } catch(e) { console.error('GET Failed API:', endpoint, 'Status:', res.status, 'Body:', text.substring(0, 50)); err = { error: res.status + ' ' + res.statusText }; }
@@ -57,6 +68,7 @@ export const api = {
       body: JSON.stringify(body)
     });
     if (!res.ok) {
+      handleUnauthorized(res, endpoint);
       const text = await res.text();
       let err;
       try { err = JSON.parse(text); } catch(e) { console.error('POST Failed API:', endpoint, 'Status:', res.status, 'Body:', text.substring(0, 50)); err = { error: res.status + ' ' + res.statusText }; }
@@ -72,6 +84,7 @@ export const api = {
       body: JSON.stringify(body)
     });
     if (!res.ok) {
+      handleUnauthorized(res, endpoint);
       const text = await res.text();
       let err;
       try { err = JSON.parse(text); } catch(e) { console.error('PUT Failed API:', endpoint, 'Status:', res.status, 'Body:', text.substring(0, 50)); err = { error: res.status + ' ' + res.statusText }; }

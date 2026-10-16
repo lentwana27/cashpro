@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User } from '../lib/types';
+import { api } from '../lib/api';
 
 interface AuthContextType {
   user: User | null;
@@ -28,11 +29,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!user) return;
-    const ping = () => fetch('/api/auth/heartbeat', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ userId: user.id })
-    }).catch(() => { /* silent */ });
+    const ping = () => api.post('/auth/heartbeat', {}).catch(() => { /* silent */ });
     ping();
     const interval = setInterval(ping, 30000); // 30s heartbeat
     return () => clearInterval(interval);

@@ -2,6 +2,7 @@ import express from 'express';
 import 'express-async-errors';
 import cors from 'cors';
 import path from 'path';
+import { randomBytes } from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import compression from 'compression';
 import 'dotenv/config';
@@ -9,6 +10,7 @@ import 'dotenv/config';
 import { db } from './src/db/index.js';
 import * as schema from './src/db/schema.js';
 import { eq, desc, or } from 'drizzle-orm';
+import { hashPassword, verifyPassword, isHashed, signToken, verifyToken, assertAuthConfig, loginLockedFor, recordLoginFailure, clearLoginFailures } from './authUtil.js';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -59,6 +61,61 @@ async function logAction(userId: string, userName: string, action: string, detai
   } catch(e) { console.error('log error', e) }
 }
 
+// ---------------------------------------------------------------------------
+// Authentication: every route except health/login/signup needs a valid signed token.
+// The verified identity then replaces whatever x-user-* headers the browser sent, so the
+// rest of this file (requireRole, audit logging, ...) can trust them.
+// ---------------------------------------------------------------------------
+const PUBLIC_PATHS = new Set(['/health', '/auth/login', '/auth/signup']);
+
+api.use(async (req: any, res, next) => {
+  delete req.headers['x-user-id'];
+  delete req.headers['x-user-name'];
+  if (PUBLIC_PATHS.has(req.path)) return next();
+
+  const header = String(req.headers['authorization'] || '');
+  const token = header.startsWith('Bearer ') ? header.slice(7) : '';
+  const payload = verifyToken(token);
+  if (!payload) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  const found = await db.select().from(schema.users).where(eq(schema.users.id, payload.uid));
+  const user = found[0];
+  if (!user || !user.active) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  req.authUser = user;
+  req.headers['x-user-id'] = user.id;
+  req.headers['x-user-name'] = user.name;
+  next();
+});
+
+const MANAGEABLE_BY_STAFF = ['CASHIER', 'SUPERVISOR'];
+
+// Who may edit/request deletion of whom (mirrors what the Users page offers each role).
+function canManageUser(actor: any, target: any): boolean {
+  if (actor.role === 'ADMIN') return true;
+  if (actor.role === 'SUPERVISOR') return target.role === 'CASHIER' && !!actor.branchId && target.branchId === actor.branchId;
+  if (actor.role === 'AUDITOR') return MANAGEABLE_BY_STAFF.includes(target.role);
+  return false;
+}
+
+// Strips fields a client must never set directly and hashes a supplied password.
+async function sanitizeUserInput(body: any): Promise<any> {
+  const data: any = { ...body };
+  delete data.id;
+  delete data.createdAt;
+  delete data.isOnline;
+  delete data.lastSeen;
+  delete data.twoFactorCode;
+  if (typeof data.passwordHash === 'string' && data.passwordHash.length > 0) {
+    data.passwordHash = await hashPassword(data.passwordHash);
+  } else {
+    delete data.passwordHash;
+  }
+  return data;
+}
+
 api.use((req, res, next) => {
   const method = req.method;
   if (method === 'POST' || method === 'PUT' || method === 'DELETE') {
@@ -80,6 +137,9 @@ api.use((req, res, next) => {
 // Auth
 api.post('/auth/signup', async (req, res) => {
   const { name, email, password, role, branchId } = req.body;
+  if (!name || !email || !password) {
+    return res.status(400).json({ error: 'Name, email and password are required' });
+  }
   const existing = await db.select().from(schema.users).where(eq(schema.users.email, email));
   if (existing.length > 0) {
     return res.status(400).json({ error: 'Email already in use' });
@@ -88,7 +148,7 @@ api.post('/auth/signup', async (req, res) => {
     id: uuidv4(),
     name,
     email,
-    passwordHash: password,
+    passwordHash: await hashPassword(String(password || '')),
     twoFactorCode: null,
     role: role || 'SUPERVISOR',
     branchId: branchId || null,
@@ -96,7 +156,7 @@ api.post('/auth/signup', async (req, res) => {
     createdAt: new Date()
   };
   await db.insert(schema.users).values(user);
-  res.json(user);
+  res.json(publicUser(user));
 });
 
 api.post('/auth/login', async (req, res) => {
@@ -104,49 +164,38 @@ api.post('/auth/login', async (req, res) => {
   if (!email || !password) {
     return res.status(400).json({ error: 'Missing email or password' });
   }
+  const key = String(email).toLowerCase();
+  const lockedMs = loginLockedFor(key);
+  if (lockedMs > 0) {
+    return res.status(429).json({ error: `Too many failed attempts. Try again in ${Math.ceil(lockedMs / 60000)} minute(s).` });
+  }
   const users = await db.select().from(schema.users).where(eq(schema.users.email, email));
   const user = users[0];
-  if (user && user.passwordHash === password) {
-    if (!user.active) {
-      return res.status(401).json({ error: 'Account pending admin approval' });
-    }
-    await db.update(schema.users).set({ isOnline: true, lastSeen: new Date().toISOString() }).where(eq(schema.users.id, user.id));
-    res.json({ user: publicUser(user), token: 'fake-jwt-token-replace-later' });
-  } else {
-    res.status(401).json({ error: 'Invalid credentials' });
+  const ok = !!user && await verifyPassword(String(password), user.passwordHash);
+  if (!ok) {
+    recordLoginFailure(key);
+    return res.status(401).json({ error: 'Invalid credentials' });
   }
-});
-
-api.post('/auth/verify-2fa', async (req, res) => {
-  const { tempToken, code } = req.body;
-  if (!tempToken || !code) {
-    return res.status(400).json({ error: 'Missing token or code' });
-  }
-  const users = await db.select().from(schema.users).where(eq(schema.users.id, tempToken));
-  const user = users[0];
-  if (!user) {
-    return res.status(401).json({ error: 'User not found' });
-  }
+  clearLoginFailures(key);
   if (!user.active) {
     return res.status(401).json({ error: 'Account pending admin approval' });
   }
-  
-  if (!user.twoFactorCode) {
-    // First time setup
-    await db.update(schema.users).set({ twoFactorCode: code, isOnline: true, lastSeen: new Date().toISOString() }).where(eq(schema.users.id, user.id));
-    return res.json({ user: publicUser(user), token: 'fake-jwt-token-replace-later' });
+  const update: any = { isOnline: true, lastSeen: new Date().toISOString() };
+  if (!isHashed(user.passwordHash)) {
+    update.passwordHash = await hashPassword(String(password)); // upgrade a legacy plain-text row
   }
-  
-  if (code !== user.twoFactorCode) {
-    return res.status(401).json({ error: 'Invalid 2FA code' });
-  }
-  
-  await db.update(schema.users).set({ isOnline: true, lastSeen: new Date().toISOString() }).where(eq(schema.users.id, user.id));
-  res.json({ user: publicUser(user), token: 'fake-jwt-token-replace-later' });
+  await db.update(schema.users).set(update).where(eq(schema.users.id, user.id));
+  res.json({ user: publicUser(user), token: signToken(user.id) });
+});
+
+// The old 2FA endpoint let anyone sign in as a user who had no 2FA code set, using only the
+// user id. The login flow never required 2FA, so it was unused; it is disabled.
+api.post('/auth/verify-2fa', (req, res) => {
+  res.status(410).json({ error: 'Two-factor sign-in is not available' });
 });
 
 api.post('/auth/logout', async (req, res) => {
-  const { userId } = req.body;
+  const userId = (req as any).authUser?.id;
   if (userId) {
     await db.update(schema.users).set({ isOnline: false, lastSeen: new Date().toISOString() }).where(eq(schema.users.id, String(userId)));
   }
@@ -154,7 +203,7 @@ api.post('/auth/logout', async (req, res) => {
 });
 
 api.post('/auth/heartbeat', async (req, res) => {
-  const uid = req.headers['x-user-id'] as string || req.body.userId;
+  const uid = req.headers['x-user-id'] as string;
   if (uid) {
     await db.update(schema.users).set({ isOnline: true, lastSeen: new Date().toISOString() }).where(eq(schema.users.id, uid));
   }
@@ -234,41 +283,66 @@ api.get('/users', async (req, res) => {
   });
   res.json(users);
 });
-api.post('/users', async (req, res) => {
+api.post('/users', async (req: any, res) => {
+  const actor = req.authUser;
+  if (!['ADMIN', 'SUPERVISOR', 'AUDITOR'].includes(actor.role)) {
+    return res.status(403).json({ error: 'Insufficient permissions' });
+  }
   const { email } = req.body;
   const existing = await db.select().from(schema.users).where(eq(schema.users.email, email));
   if (existing.length > 0) {
     return res.status(400).json({ error: 'Email already in use' });
   }
-  const user = { ...req.body, id: uuidv4(), active: true };
-  if (user.createdAt) {
-    user.createdAt = new Date(user.createdAt);
-  } else {
-    user.createdAt = new Date();
+  const data = await sanitizeUserInput(req.body);
+  if (!data.passwordHash) {
+    return res.status(400).json({ error: 'A password is required' });
   }
+  if (actor.role !== 'ADMIN') {
+    const allowedRoles = actor.role === 'SUPERVISOR' ? ['CASHIER'] : MANAGEABLE_BY_STAFF;
+    if (!allowedRoles.includes(data.role || 'CASHIER')) {
+      return res.status(403).json({ error: 'You cannot create a user with that role' });
+    }
+    if (actor.role === 'SUPERVISOR') data.branchId = actor.branchId;
+  }
+  const user = { ...data, id: uuidv4(), active: true, createdAt: new Date() };
   await db.insert(schema.users).values(user);
   res.json(publicUser(user));
 });
-api.put('/users/:id', async (req, res) => {
-  const data = { ...req.body };
+api.put('/users/:id', async (req: any, res) => {
+  const actor = req.authUser;
+  const found = await db.select().from(schema.users).where(eq(schema.users.id, req.params.id));
+  const target = found[0];
+  if (!target) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+  if (!canManageUser(actor, target)) {
+    return res.status(403).json({ error: 'Insufficient permissions' });
+  }
+  const data = await sanitizeUserInput(req.body);
   if (data.email) {
     const existing = await db.select().from(schema.users).where(eq(schema.users.email, data.email));
     if (existing.length > 0 && existing[0].id !== req.params.id) {
       return res.status(400).json({ error: 'Email already in use by another user' });
     }
   }
-  if (data.createdAt) {
-    delete data.createdAt; // Prevent overriding createdAt incorrectly
+  if (actor.role !== 'ADMIN') {
+    const allowedRoles = actor.role === 'SUPERVISOR' ? ['CASHIER'] : MANAGEABLE_BY_STAFF;
+    if (data.role !== undefined && !allowedRoles.includes(data.role)) {
+      return res.status(403).json({ error: 'You cannot assign that role' });
+    }
+    if (actor.role === 'SUPERVISOR') data.branchId = actor.branchId;
   }
-  await db.update(schema.users).set(data).where(eq(schema.users.id, req.params.id));
+  if (Object.keys(data).length > 0) {
+    await db.update(schema.users).set(data).where(eq(schema.users.id, req.params.id));
+  }
   res.json({ success: true });
 });
-api.put('/users/:id/approve', async (req, res) => {
+api.put('/users/:id/approve', requireRole('ADMIN'), async (req, res) => {
   await db.update(schema.users).set({ active: true }).where(eq(schema.users.id, req.params.id));
   res.json({ success: true });
 });
 
-api.delete('/users/:id', async (req, res) => {
+api.delete('/users/:id', requireRole('ADMIN'), async (req, res) => {
   await db.delete(schema.users).where(eq(schema.users.id, req.params.id));
   res.json({ success: true });
 });
@@ -278,56 +352,64 @@ api.get('/branches', async (req, res) => {
   const branches = await db.select().from(schema.branches);
   res.json(branches);
 });
-api.post('/branches', async (req, res) => {
+api.post('/branches', requireRole('ADMIN'), async (req, res) => {
   const branch = { ...req.body, id: uuidv4(), active: true };
   await db.insert(schema.branches).values(branch);
   res.json(branch);
 });
-api.put('/branches/:id', async (req, res) => {
+api.put('/branches/:id', requireRole('ADMIN'), async (req, res) => {
   await db.update(schema.branches).set(req.body).where(eq(schema.branches.id, req.params.id));
   res.json({ success: true });
 });
-api.delete('/branches/:id', async (req, res) => {
+api.delete('/branches/:id', requireRole('ADMIN'), async (req, res) => {
   await db.delete(schema.branches).where(eq(schema.branches.id, req.params.id));
   res.json({ success: true });
 });
 
 // Messages
-api.get('/messages', async (req, res) => {
+api.get('/messages', requireRole('ADMIN'), async (req, res) => {
   const msgs = await db.select().from(schema.messages).orderBy(desc(schema.messages.createdAt));
   res.json(msgs);
 });
-api.get('/messages/:userId', async (req, res) => {
+api.get('/messages/:userId', async (req: any, res) => {
   const userId = req.params.userId;
+  if (userId !== req.authUser.id && req.authUser.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Insufficient permissions' });
+  }
   const msgs = await db.select()
     .from(schema.messages)
     .where(or(eq(schema.messages.toId, userId), eq(schema.messages.fromId, userId)))
     .orderBy(desc(schema.messages.createdAt));
   res.json(msgs);
 });
-api.post('/messages', async (req, res) => {
-  const msg = { ...req.body, id: uuidv4(), createdAt: new Date().toISOString(), read: false };
+api.post('/messages', async (req: any, res) => {
+  const msg = { ...req.body, fromId: req.authUser.id, id: uuidv4(), createdAt: new Date().toISOString(), read: false };
   await db.insert(schema.messages).values(msg);
   res.json(msg);
 });
-api.put('/messages/:id/read', async (req, res) => {
+api.put('/messages/:id/read', async (req: any, res) => {
+  const found = await db.select().from(schema.messages).where(eq(schema.messages.id, req.params.id));
+  if (!found[0]) return res.status(404).json({ error: 'Message not found' });
+  if (found[0].toId !== req.authUser.id && req.authUser.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Insufficient permissions' });
+  }
   await db.update(schema.messages).set({ read: true }).where(eq(schema.messages.id, req.params.id));
   res.json({ success: true });
 });
 
 // Logs
-api.get('/logs', async (req, res) => {
+api.get('/logs', requireRole('ADMIN'), async (req, res) => {
   const logs = await db.select().from(schema.systemLogs).orderBy(desc(schema.systemLogs.timestamp));
   res.json(logs);
 });
-api.post('/logs', async (req, res) => {
-  await db.insert(schema.systemLogs).values({ ...req.body, id: uuidv4(), timestamp: new Date().toISOString() });
+api.post('/logs', async (req: any, res) => {
+  await db.insert(schema.systemLogs).values({ ...req.body, userId: req.authUser.id, userName: req.authUser.name, id: uuidv4(), timestamp: new Date().toISOString() });
   res.json({ success: true });
 });
 
 // Reconciliations
 
-api.delete('/reconciliations/branch/:branchId', async (req, res) => {
+api.delete('/reconciliations/branch/:branchId', requireRole('ADMIN'), async (req, res) => {
   try {
     const { branchId } = req.params;
     await db.delete(schema.reconciliations).where(eq(schema.reconciliations.branchId, branchId));
@@ -388,12 +470,29 @@ api.get('/reconciliations', async (req, res) => {
 
   res.json(recs);
 });
-api.post('/reconciliations', async (req, res) => {
+api.post('/reconciliations', async (req: any, res) => {
+  const actor = req.authUser;
+  if (!['ADMIN', 'SUPERVISOR'].includes(actor.role)) {
+    return res.status(403).json({ error: 'Insufficient permissions' });
+  }
+  if (actor.role === 'SUPERVISOR' && req.body.branchId !== actor.branchId) {
+    return res.status(403).json({ error: 'You can only submit for your own branch' });
+  }
   const recon = { ...req.body, id: uuidv4(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
   await db.insert(schema.reconciliations).values(recon);
   res.json(recon);
 });
-api.put('/reconciliations/:id', async (req, res) => {
+api.put('/reconciliations/:id', async (req: any, res) => {
+  const actor = req.authUser;
+  if (actor.role === 'CASHIER') {
+    return res.status(403).json({ error: 'Insufficient permissions' });
+  }
+  if (actor.role === 'SUPERVISOR') {
+    const target = (await db.select().from(schema.reconciliations).where(eq(schema.reconciliations.id, req.params.id)))[0];
+    if (!target || target.branchId !== actor.branchId) {
+      return res.status(403).json({ error: 'You can only change your own branch' });
+    }
+  }
   const uid = req.headers['x-user-id'] as string;
   const uname = req.headers['x-user-name'] as string;
 
@@ -472,7 +571,7 @@ api.get('/updates', async (req, res) => {
   }
 });
 
-api.post('/updates', async (req, res) => {
+api.post('/updates', requireRole('ADMIN'), async (req, res) => {
   try {
     const data = { ...req.body, id: uuidv4() };
     await db.insert(schema.systemUpdates).values(data);
@@ -483,7 +582,7 @@ api.post('/updates', async (req, res) => {
   }
 });
 
-api.put('/updates/:id', async (req, res) => {
+api.put('/updates/:id', requireRole('ADMIN'), async (req, res) => {
   try {
     const { id } = req.params;
     const data = req.body;
@@ -494,7 +593,7 @@ api.put('/updates/:id', async (req, res) => {
   }
 });
 
-api.delete('/updates/:id', async (req, res) => {
+api.delete('/updates/:id', requireRole('ADMIN'), async (req, res) => {
   try {
     await db.delete(schema.systemUpdates).where(eq(schema.systemUpdates.id, req.params.id));
     res.json({ success: true });
@@ -522,7 +621,27 @@ app.use((err: any, req: any, res: any, next: any) => {
 // ==========================================
 // STARTUP + VITE MIDDLEWARE
 // ==========================================
+// One-time (idempotent) migration: replace every remaining plain-text password with a salted hash.
+// Each hash is checked against the original before it is written, and nothing is logged but counts.
+async function migratePasswords() {
+  const all = await db.select().from(schema.users);
+  let migrated = 0, skipped = 0, failed = 0;
+  for (const u of all) {
+    if (!u.passwordHash || isHashed(u.passwordHash)) { skipped++; continue; }
+    try {
+      const hashed = await hashPassword(u.passwordHash);
+      if (!(await verifyPassword(u.passwordHash, hashed))) { failed++; continue; }
+      await db.update(schema.users).set({ passwordHash: hashed }).where(eq(schema.users.id, u.id));
+      migrated++;
+    } catch {
+      failed++;
+    }
+  }
+  console.log(`Password migration: ${migrated} hashed, ${skipped} already hashed/empty, ${failed} failed`);
+}
+
 async function startServer() {
+  assertAuthConfig();
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
@@ -542,13 +661,19 @@ async function startServer() {
     console.log(`Server running on http://localhost:${PORT}`);
     
     try {
+      await migratePasswords();
+    } catch (e) {
+      console.log('Password migration error', e);
+    }
+
+    try {
       const users = await db.select().from(schema.users).where(eq(schema.users.email, 'admin@cashuppro.com'));
       if (users.length === 0) {
         await db.insert(schema.users).values({
           id: 'admin-1',
           name: 'System Admin',
           email: 'admin@cashuppro.com',
-          passwordHash: 'admin50$',
+          passwordHash: await hashPassword(process.env.INITIAL_ADMIN_PASSWORD || randomBytes(24).toString('hex')),
           role: 'ADMIN',
           active: true,
         });
