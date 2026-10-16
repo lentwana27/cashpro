@@ -7,7 +7,7 @@ import { ExchangeRatesModal } from '../components/ExchangeRatesModal';
 import clsx from 'clsx';
 import { format } from 'date-fns';
 import { PaginationBar, paginate } from '../components/PaginationBar';
-import { Period, getPeriodRange, inRange } from '../lib/period';
+import { Period, PERIOD_OPTIONS, getPeriodRange, inRange } from '../lib/period';
 
 type UnlockPeriod = Period;
 
@@ -48,6 +48,14 @@ export function AdminDashboard() {
   const [branchStatusFilter, setBranchStatusFilter] = useState('ALL');
   const [branchPage, setBranchPage] = useState(1);
   const BRANCH_PAGE_SIZE = 8;
+  const [updSearch, setUpdSearch] = useState('');
+  const [updAudience, setUpdAudience] = useState('ALL');
+  const [updPeriod, setUpdPeriod] = useState<Period>('ALL');
+  const [updFrom, setUpdFrom] = useState('');
+  const [updTo, setUpdTo] = useState('');
+  const [updPageSize, setUpdPageSize] = useState(5);
+  const [updPage, setUpdPage] = useState(1);
+  useEffect(() => { setUpdPage(1); }, [updSearch, updAudience, updPeriod, updFrom, updTo, updPageSize]);
   useEffect(() => { setLogPage(1); }, [logDateFilter, logSuspiciousOnly, logSearch]);
   useEffect(() => { setUserPage(1); }, [userSearch, userRoleFilter, userStatusFilter]);
   useEffect(() => { setBranchPage(1); }, [branchSearch, branchStatusFilter]);
@@ -240,6 +248,16 @@ export function AdminDashboard() {
     return true;
   });
   const branchView = paginate<Branch>(filteredBranchList, branchPage, BRANCH_PAGE_SIZE);
+
+  const updRange = getPeriodRange(updPeriod, updFrom, updTo);
+  const updQuery = updSearch.trim().toLowerCase();
+  const audienceRoles = Array.from(new Set<string>(updates.flatMap((u: any) => (u.targetRoles || []) as string[]).filter((r: string) => r !== 'ALL'))).sort();
+  const filteredUpdates = updates
+    .filter((u: any) => inRange(String(u.date || '').substring(0, 10), updRange))
+    .filter((u: any) => updAudience === 'ALL' || !u.targetRoles || u.targetRoles.length === 0 || u.targetRoles.includes('ALL') || u.targetRoles.includes(updAudience))
+    .filter((u: any) => !updQuery || `${u.title} ${u.id} ${(u.features || []).join(' ')}`.toLowerCase().includes(updQuery));
+  const updView = paginate<any>(filteredUpdates, updPage, updPageSize);
+  const updFiltersActive = !!updQuery || updAudience !== 'ALL' || updPeriod !== 'ALL';
 
   return (
     <div className="space-y-8">
@@ -618,8 +636,44 @@ export function AdminDashboard() {
             <Plus className="w-4 h-4" /> New Update
           </button>
         </div>
+        {updates.length > 0 && (
+          <div className="flex flex-wrap items-end gap-3 mb-4">
+            <div className="flex-1 min-w-[10rem]">
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Search</label>
+              <input type="text" value={updSearch} onChange={e => setUpdSearch(e.target.value)} placeholder="Title, id or feature..." className="w-full bg-[#112240] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500 placeholder:text-slate-500" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Audience</label>
+              <select value={updAudience} onChange={e => setUpdAudience(e.target.value)} className="bg-[#112240] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+                <option value="ALL">All audiences</option>
+                {audienceRoles.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Period</label>
+              <select value={updPeriod} onChange={e => setUpdPeriod(e.target.value as Period)} className="bg-[#112240] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+                {PERIOD_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+            {updPeriod === 'CUSTOM' && (
+              <>
+                <div><label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">From</label><input type="date" value={updFrom} onChange={e => setUpdFrom(e.target.value)} className="bg-[#112240] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500" /></div>
+                <div><label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">To</label><input type="date" value={updTo} onChange={e => setUpdTo(e.target.value)} className="bg-[#112240] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500" /></div>
+              </>
+            )}
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Rows</label>
+              <select value={updPageSize} onChange={e => setUpdPageSize(Number(e.target.value))} className="bg-[#112240] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+                {[5, 10, 25].map(n => <option key={n} value={n}>{n} / page</option>)}
+              </select>
+            </div>
+            {updFiltersActive && (
+              <button onClick={() => { setUpdSearch(''); setUpdAudience('ALL'); setUpdPeriod('ALL'); setUpdFrom(''); setUpdTo(''); }} className="text-xs text-slate-400 hover:text-white px-3 py-2 border border-[#1e345e] rounded-lg transition-colors">Clear filters</button>
+            )}
+          </div>
+        )}
         <div className="space-y-4">
-          {updates.map(u => (
+          {updView.pageItems.map(u => (
             <div key={u.id} className="bg-[#112240] border border-[#1e345e] p-4 rounded-xl">
               <div className="flex justify-between items-start mb-2">
                 <div>
@@ -660,7 +714,9 @@ export function AdminDashboard() {
             </div>
           ))}
           {updates.length === 0 && <div className="text-slate-500 text-sm">No updates published.</div>}
+          {updates.length > 0 && filteredUpdates.length === 0 && <div className="text-slate-500 text-sm">No updates match the filters.</div>}
         </div>
+        <PaginationBar page={updView.currentPage} totalPages={updView.totalPages} totalItems={filteredUpdates.length} pageSize={updPageSize} onPageChange={setUpdPage} />
       </div>
 
       
