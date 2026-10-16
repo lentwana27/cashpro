@@ -11,6 +11,10 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Download, Trash2, ShieldCheck } from 'lucide-react';
 import { AmendmentStagePills, isAmendmentStatus } from './AmendmentStagePills';
+import { PaginationBar, paginate } from './PaginationBar';
+
+const SECTION_PAGE_SIZE = 5;
+const TILL_PAGE_SIZE = 5;
 
 const money = (n: any) => `$${(Number(n) || 0).toFixed(2)}`;
 
@@ -69,10 +73,23 @@ const getCashierName = (item: any, tillVariances?: any[]): string | null => {
 
 const BreakdownSection = ({ title, items, tillVariances, footer }: { title: string, items: any, tillVariances?: any[], footer?: { label: string, value: number } }) => {
   const arr = Array.isArray(items) ? items : items ? [items] : [];
+  const [search, setSearch] = useState('');
+  const [currency, setCurrency] = useState('ALL');
+  const [page, setPage] = useState(1);
+  useEffect(() => { setPage(1); }, [search, currency]);
   if (arr.length === 0) return null;
   const total = arr.reduce((a:number,b:any)=>a+(b.usdEquivalent||0), 0);
 
   const cashierFor = (item: any) => getCashierName(item, tillVariances);
+  const currencies = Array.from(new Set<string>(arr.map((i: any) => i.currencyCode).filter(Boolean)));
+  const q = search.trim().toLowerCase();
+  const filtered = arr
+    .filter((i: any) => currency === 'ALL' || i.currencyCode === currency)
+    .filter((i: any) => !q || `${i.description || ''} ${cashierFor(i) || ''} ${i.date || ''}`.toLowerCase().includes(q));
+  const view = paginate<any>(filtered, page, SECTION_PAGE_SIZE);
+  const filtering = !!q || currency !== 'ALL';
+  const showControls = arr.length > SECTION_PAGE_SIZE;
+  const subtotal = filtered.reduce((a: number, b: any) => a + (b.usdEquivalent || 0), 0);
 
   return (
     <div className="mb-4">
@@ -80,8 +97,20 @@ const BreakdownSection = ({ title, items, tillVariances, footer }: { title: stri
         <span>{title}</span>
         <span className="font-mono text-white">${total.toFixed(2)}</span>
       </div>
+      {showControls && (
+        <div className="flex flex-wrap gap-2 mb-2 ml-1">
+          <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search items..." className="flex-1 min-w-[8rem] bg-[#0a192f] border border-[#1e345e] rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500 placeholder:text-slate-500" />
+          {currencies.length > 1 && (
+            <select value={currency} onChange={e => setCurrency(e.target.value)} className="bg-[#0a192f] border border-[#1e345e] rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500">
+              <option value="ALL">All currencies</option>
+              {currencies.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          )}
+        </div>
+      )}
       <div className="space-y-1.5 border-l-2 border-[#1e345e] ml-1 pl-3">
-        {arr.map((item: any, idx: number) => {
+        {filtered.length === 0 && <div className="text-xs text-slate-500 italic">No items match.</div>}
+        {view.pageItems.map((item: any, idx: number) => {
           const cashierName = cashierFor(item);
           return (
             <div key={idx} className="flex justify-between text-xs">
@@ -95,6 +124,15 @@ const BreakdownSection = ({ title, items, tillVariances, footer }: { title: stri
           );
         })}
       </div>
+      {filtering && (
+        <div className="flex justify-between text-xs mt-2 ml-1 text-slate-400">
+          <span>Filtered subtotal ({filtered.length} of {arr.length})</span>
+          <span className="font-mono">${subtotal.toFixed(2)}</span>
+        </div>
+      )}
+      {showControls && (
+        <PaginationBar page={view.currentPage} totalPages={view.totalPages} totalItems={filtered.length} pageSize={SECTION_PAGE_SIZE} onPageChange={setPage} />
+      )}
       {footer && (
         <div className="flex justify-between text-xs font-bold mt-2 pt-2 border-t border-[#1e345e]">
           <span className="text-slate-300">{footer.label}</span>
@@ -117,6 +155,10 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteReason, setDeleteReason] = useState('');
   const [branches, setBranches] = useState<any[]>([]);
+  const [tvSearch, setTvSearch] = useState('');
+  const [tvResult, setTvResult] = useState<'ALL' | 'SHORT' | 'OVER' | 'BALANCED'>('ALL');
+  const [tvPage, setTvPage] = useState(1);
+  useEffect(() => { setTvPage(1); }, [tvSearch, tvResult]);
 
   useEffect(() => {
     api.get('/branches').then(setBranches).catch(() => {});
@@ -388,6 +430,13 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
   if (!localRecon) return null;
   const totals = computeTotals(localRecon);
   const derivedTillVariances = deriveTillVariances(localRecon);
+  const tvQuery = tvSearch.trim().toLowerCase();
+  const tvEntries = derivedTillVariances
+    .map((tv: any, idx: number) => ({ tv, idx }))
+    .filter(({ tv }: any) => !tvQuery || `${tv.tillName || ''} ${tv.cashierName || ''}`.toLowerCase().includes(tvQuery))
+    .filter(({ tv }: any) => tvResult === 'ALL' || (tvResult === 'SHORT' ? (tv.variance || 0) < 0 : tvResult === 'OVER' ? (tv.variance || 0) > 0 : (tv.variance || 0) === 0));
+  const tvView = paginate<any>(tvEntries, tvPage, TILL_PAGE_SIZE);
+  const showTvControls = derivedTillVariances.length > 3;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm overflow-hidden">
   <div className="bg-[#0a192f] border border-[#1e345e] rounded-2xl w-full max-w-5xl max-h-full shadow-2xl overflow-y-auto flex flex-col relative">
@@ -455,8 +504,20 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
         {derivedTillVariances.length > 0 && (
           <div className="px-6 pb-6 bg-[#061121]">
             <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-[#1e345e] pb-2">Till Variances</h4>
+            {showTvControls && (
+              <div className="flex flex-wrap gap-2 mb-4">
+                <input type="text" value={tvSearch} onChange={e => setTvSearch(e.target.value)} placeholder="Search till or cashier..." className="flex-1 min-w-[10rem] bg-[#0a192f] border border-[#1e345e] rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500 placeholder:text-slate-500" />
+                <select value={tvResult} onChange={e => setTvResult(e.target.value as any)} className="bg-[#0a192f] border border-[#1e345e] rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500">
+                  <option value="ALL">All results</option>
+                  <option value="SHORT">Shortages</option>
+                  <option value="OVER">Overs</option>
+                  <option value="BALANCED">Balanced</option>
+                </select>
+              </div>
+            )}
             <div className="space-y-4">
-              {derivedTillVariances.map((tv: any, idx: number) => (
+              {tvEntries.length === 0 && <div className="text-sm text-slate-500 italic">No tills match the filters.</div>}
+              {tvView.pageItems.map(({ tv, idx }: any) => (
                 <div key={idx} className="bg-[#112240] border border-[#1e345e] rounded-lg p-4">
                   <div className="flex justify-between items-start mb-2">
                     <div>
@@ -516,6 +577,9 @@ export function ReconModal({ recon, onClose }: { recon: any, onClose: () => void
                 </div>
               ))}
             </div>
+            {showTvControls && (
+              <PaginationBar page={tvView.currentPage} totalPages={tvView.totalPages} totalItems={tvEntries.length} pageSize={TILL_PAGE_SIZE} onPageChange={setTvPage} />
+            )}
           </div>
         )}
 
