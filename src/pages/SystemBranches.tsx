@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Branch, User, DailyReconciliation } from '../lib/types';
-import { Building2, X, CheckCircle, Activity, Search, Target, MessageCircle, AlertTriangle, Send, ShieldCheck, Plus, UserSquare, UserPlus, ArrowRightLeft } from 'lucide-react';
+import { Building2, X, CheckCircle, Activity, Search, Target, MessageCircle, AlertTriangle, Send, ShieldCheck, Plus, UserSquare, UserPlus, ArrowRightLeft, FileText, DollarSign, TrendingUp, Users, History, Settings, MapPin } from 'lucide-react';
 import clsx from 'clsx';
 import { formatDistanceToNow, format } from 'date-fns';
 import { useAuth } from '../components/AuthProvider';
@@ -12,6 +12,30 @@ import { AmendmentStagePills, isAmendmentStatus } from '../components/AmendmentS
 import { BranchHistoryModal } from '../components/BranchHistoryModal';
 import { CashierHistoryModal } from '../components/CashierHistoryModal';
 import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, Cell } from 'recharts';
+import { PaginationBar, paginate } from '../components/PaginationBar';
+import { Period, PERIOD_OPTIONS, getPeriodRange, inRange } from '../lib/period';
+
+const BRANCH_LIST_PAGE_SIZE = 8;
+const OPERATOR_PAGE_SIZE = 5;
+const selectCls = 'bg-[#0a192f] border border-[#1e345e] rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500';
+const labelCls = 'block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1';
+
+const totalSalesOf = (c: any) => Array.isArray(c.totalSales) ? c.totalSales.reduce((a: number, b: any) => a + (b.usdEquivalent || 0), 0) : (c.totalSales?.usdEquivalent || 0);
+const money = (n: number) => `$${n.toFixed(2)}`;
+const signed = (n: number) => `${n > 0 ? '+' : ''}${n.toFixed(2)}`;
+const varianceColor = (n: number) => n > 0 ? 'text-emerald-400' : n < 0 ? 'text-rose-400' : 'text-blue-400';
+
+function StatusBadge({ status }: { status: string }) {
+  if (isAmendmentStatus(status)) return <AmendmentStagePills status={status} />;
+  return (
+    <span className={clsx(
+      'px-2 py-1 rounded text-xs font-bold uppercase tracking-wider border',
+      status === 'APPROVED' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+      status === 'FLAGGED' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
+      'bg-blue-500/10 text-blue-400 border-blue-500/20'
+    )}>{status}</span>
+  );
+}
 
 export function SystemBranches() {
   const { user: currentUser } = useAuth();
@@ -32,6 +56,29 @@ export function SystemBranches() {
   const [editTillName, setEditTillName] = useState('');
   const [showBranchHistory, setShowBranchHistory] = useState(false);
   const [selectedCashierForHistory, setSelectedCashierForHistory] = useState<{id: string, name: string} | null>(null);
+
+  const [branchSearch, setBranchSearch] = useState('');
+  const [branchStatusFilter, setBranchStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+  const [branchListPage, setBranchListPage] = useState(1);
+
+  const [detailTab, setDetailTab] = useState<'cashups' | 'supervisors' | 'operators'>('cashups');
+  const [supervisorFilter, setSupervisorFilter] = useState('ALL');
+  const [period, setPeriod] = useState<Period>('ALL');
+  const [periodFrom, setPeriodFrom] = useState('');
+  const [periodTo, setPeriodTo] = useState('');
+  const [pageSize, setPageSize] = useState(10);
+  const [cashupPage, setCashupPage] = useState(1);
+  const [operatorPage, setOperatorPage] = useState(1);
+
+  const resetDetailFilters = () => {
+    setSupervisorFilter('ALL');
+    setPeriod('ALL');
+    setPeriodFrom('');
+    setPeriodTo('');
+    setCashupPage(1);
+    setOperatorPage(1);
+  };
+  const resetPages = () => { setCashupPage(1); setOperatorPage(1); };
 
   const loadData = () => {
     Promise.all([
@@ -164,6 +211,38 @@ export function SystemBranches() {
     return reconciliations.filter(r => r.supervisorId === supId && r.branchId === bId);
   };
 
+  const filteredBranches = [...branches]
+    .filter(b => branchStatusFilter === 'ALL' || (branchStatusFilter === 'ACTIVE' ? b.active !== false : b.active === false))
+    .filter(b => {
+      const q = branchSearch.trim().toLowerCase();
+      return !q || b.name.toLowerCase().includes(q) || (b.code || '').toLowerCase().includes(q) || (b.location || '').toLowerCase().includes(q);
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const branchListView = paginate(filteredBranches, branchListPage, BRANCH_LIST_PAGE_SIZE);
+
+  const periodRange = getPeriodRange(period, periodFrom, periodTo);
+  const detailFiltersActive = supervisorFilter !== 'ALL' || period !== 'ALL';
+  const branchSupervisors = selectedBranch ? getSupervisorsForBranch(selectedBranch.id) : [];
+  const branchPeriodRecons = selectedBranch ? reconciliations.filter(r => r.branchId === selectedBranch.id && inRange(r.date, periodRange)) : [] as DailyReconciliation[];
+  const filteredCashUps = branchPeriodRecons
+    .filter(r => supervisorFilter === 'ALL' || r.supervisorId === supervisorFilter)
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const cashUpView = paginate<DailyReconciliation>(filteredCashUps, cashupPage, pageSize);
+  const kpiSales = filteredCashUps.reduce((acc, c) => acc + totalSalesOf(c), 0);
+  const kpiVariance = filteredCashUps.reduce((acc, c) => acc + (c.varianceUsd || 0), 0);
+  const supervisorCards = branchSupervisors.filter(s => supervisorFilter === 'ALL' || s.id === supervisorFilter);
+  const supervisorName = (id: string) => (users || []).find(u => u.id === id)?.name || 'Unknown';
+
+  const operatorRows = selectedBranch
+    ? getTillOperatorsForBranch(selectedBranch.id)
+        .map(op => {
+          const vars = getTillVariancesForOperatorAndBranch(op.id, selectedBranch.id).filter(v => inRange(v.date, periodRange));
+          return { op, vars, total: vars.reduce((acc, v) => acc + (v.varianceUsd || 0), 0) };
+        })
+        .filter(row => period === 'ALL' || row.vars.length > 0)
+    : [];
+  const operatorView = paginate(operatorRows, operatorPage, OPERATOR_PAGE_SIZE);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -187,32 +266,64 @@ export function SystemBranches() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 border border-[#1e345e] bg-[#0a192f] rounded-xl shadow-xl flex flex-col min-h-[500px] lg:h-[700px]">
-          <div className="p-4 border-b border-[#1e345e] bg-[#061121] rounded-t-xl">
+          <div className="p-4 border-b border-[#1e345e] bg-[#061121] rounded-t-xl space-y-3">
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
               <Building2 className="w-5 h-5 text-emerald-400" /> All Branches
+              <span className="ml-auto text-xs font-mono text-slate-400 bg-[#112240] border border-[#1e345e] px-2 py-0.5 rounded-full">{filteredBranches.length}</span>
             </h2>
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={branchSearch}
+                onChange={e => { setBranchSearch(e.target.value); setBranchListPage(1); }}
+                placeholder="Search name, code or location..."
+                className="w-full bg-[#0a192f] border border-[#1e345e] rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+            <div className="flex gap-1">
+              {(['ALL', 'ACTIVE', 'INACTIVE'] as const).map(s => (
+                <button
+                  key={s}
+                  onClick={() => { setBranchStatusFilter(s); setBranchListPage(1); }}
+                  className={clsx(
+                    'flex-1 text-[11px] font-bold uppercase tracking-wider py-1.5 rounded border transition-colors',
+                    branchStatusFilter === s ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-[#0a192f] text-slate-400 border-[#1e345e] hover:text-white'
+                  )}
+                >{s === 'ALL' ? 'All' : s === 'ACTIVE' ? 'Active' : 'Inactive'}</button>
+              ))}
+            </div>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {branches.map(b => (
-              <button 
-                key={b.id} 
-                onClick={() => setSelectedBranch(b)}
+            {branchListView.pageItems.length === 0 && (
+              <div className="text-center text-sm text-slate-500 py-10">No branches match your search.</div>
+            )}
+            {branchListView.pageItems.map(b => (
+              <button
+                key={b.id}
+                onClick={() => { setSelectedBranch(b); resetDetailFilters(); setDetailTab('cashups'); setIsAddingBranch(false); setEditForm({}); }}
                 className={clsx(
                   "w-full text-left p-4 border rounded-xl transition-all shadow-md group",
-                  selectedBranch?.id === b.id 
-                    ? "bg-[#112240] border-emerald-500 shadow-[0_0_15px_rgba(52,211,153,0.1)]" 
+                  selectedBranch?.id === b.id
+                    ? "bg-[#112240] border-emerald-500 shadow-[0_0_15px_rgba(52,211,153,0.1)]"
                     : "bg-[#061121] border-[#1e345e] hover:border-[#2a457e] hover:bg-[#112240]"
                 )}
               >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <div className="font-bold text-white text-base group-hover:text-emerald-400 transition-colors">{b.name}</div>
-                    <div className="text-xs text-slate-400 mt-1 flex items-center gap-1"><MapPinIcon className="w-3 h-3"/> {b.location}</div>
+                <div className="flex justify-between items-start gap-2">
+                  <div className="min-w-0">
+                    <div className="font-bold text-white text-base group-hover:text-emerald-400 transition-colors truncate">{b.name}</div>
+                    <div className="text-xs text-slate-400 mt-1 flex items-center gap-1"><MapPinIcon className="w-3 h-3 shrink-0"/> <span className="truncate">{b.location}</span></div>
                   </div>
-                  <span className="font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded text-xs border border-emerald-500/20">{b.code}</span>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <span className="font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded text-xs border border-emerald-500/20">{b.code}</span>
+                    {b.active === false && <span className="text-[10px] uppercase font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full">Inactive</span>}
+                  </div>
                 </div>
               </button>
             ))}
+          </div>
+          <div className="px-4 pb-4 border-t border-[#1e345e]">
+            <PaginationBar page={branchListView.currentPage} totalPages={branchListView.totalPages} totalItems={filteredBranches.length} pageSize={BRANCH_LIST_PAGE_SIZE} onPageChange={setBranchListPage} />
           </div>
         </div>
 
@@ -294,76 +405,183 @@ export function SystemBranches() {
             </div>
           ) : selectedBranch ? (
             <>
-              <div className="p-4 sm:p-6 border-b border-[#1e345e] bg-[#061121] rounded-t-xl flex justify-between items-center">
-                <div>
-                  <h2 className="text-xl font-bold text-white">{selectedBranch.name} Dashboard</h2>
-                  <p className="text-slate-400 text-sm mt-1">{selectedBranch.location}</p>
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={() => setShowBranchHistory(true)} className="text-sm px-4 py-2 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded hover:bg-blue-500/20 transition-colors">
-                    View Branch History
-                  </button>
-                  {currentUser?.role === 'ADMIN' && (
-                    <button onClick={() => { setEditForm({...selectedBranch}); setIsAddingBranch(true); }} className="text-sm px-4 py-2 bg-[#112240] border border-[#1e345e] text-slate-300 rounded hover:text-white transition-colors">
-                      Configure Branch
+              <div className="p-4 sm:p-6 border-b border-[#1e345e] bg-gradient-to-r from-[#061121] to-[#0a192f] rounded-t-xl">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-4 min-w-0">
+                    <div className="w-12 h-12 rounded-xl shrink-0 bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                      <Building2 className="w-6 h-6 text-emerald-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="text-xl font-bold text-white truncate">{selectedBranch.name}</h2>
+                        <span className="font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded text-xs border border-emerald-500/20">{selectedBranch.code}</span>
+                        <span className={clsx('text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border', selectedBranch.active === false ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20')}>
+                          {selectedBranch.active === false ? 'Inactive' : 'Active'}
+                        </span>
+                      </div>
+                      <p className="text-slate-400 text-sm mt-1 flex items-center gap-1"><MapPin className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">{selectedBranch.location}</span></p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <button onClick={() => setShowBranchHistory(true)} className="text-sm px-3 py-2 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/20 transition-colors flex items-center gap-2">
+                      <History className="w-4 h-4" /> History
                     </button>
-                  )}
+                    {currentUser?.role === 'ADMIN' && (
+                      <button onClick={() => { setEditForm({...selectedBranch}); setIsAddingBranch(true); }} className="text-sm px-3 py-2 bg-[#112240] border border-[#1e345e] text-slate-300 rounded-lg hover:text-white transition-colors flex items-center gap-2">
+                        <Settings className="w-4 h-4" /> Configure
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-5">
+                  <div className="bg-[#0a192f] border border-[#1e345e] rounded-lg p-3">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1"><FileText className="w-3 h-3" /> Cash-ups</div>
+                    <div className="text-xl font-bold text-white mt-1">{filteredCashUps.length}</div>
+                  </div>
+                  <div className="bg-[#0a192f] border border-[#1e345e] rounded-lg p-3">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1"><DollarSign className="w-3 h-3" /> Total Sales</div>
+                    <div className="text-xl font-bold text-white mt-1">{money(kpiSales)}</div>
+                  </div>
+                  <div className="bg-[#0a192f] border border-[#1e345e] rounded-lg p-3">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1"><TrendingUp className="w-3 h-3" /> Net Variance</div>
+                    <div className={clsx('text-xl font-bold mt-1', varianceColor(kpiVariance))}>{signed(kpiVariance)}</div>
+                  </div>
+                  <div className="bg-[#0a192f] border border-[#1e345e] rounded-lg p-3">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1"><Users className="w-3 h-3" /> Team</div>
+                    <div className="text-xl font-bold text-white mt-1">{branchSupervisors.length} <span className="text-xs font-normal text-slate-400">sup.</span> / {operatorRows.length} <span className="text-xs font-normal text-slate-400">ops.</span></div>
+                  </div>
                 </div>
               </div>
-              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-8">
-                <div className="flex items-center justify-between mb-4 mt-2">
-                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                    <ShieldCheck className="w-5 h-5 text-emerald-400" /> Supervisors
-                  </h3>
+
+              <div className="px-4 sm:px-6 py-3 border-b border-[#1e345e] bg-[#061121]/60 flex flex-wrap items-end gap-3">
+                <div>
+                  <label className={labelCls}>Supervisor</label>
+                  <select value={supervisorFilter} onChange={e => { setSupervisorFilter(e.target.value); resetPages(); }} className={selectCls}>
+                    <option value="ALL">All Supervisors</option>
+                    {branchSupervisors.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
                 </div>
+                <div>
+                  <label className={labelCls}>Period</label>
+                  <select value={period} onChange={e => { setPeriod(e.target.value as Period); resetPages(); }} className={selectCls}>
+                    {PERIOD_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
+                {period === 'CUSTOM' && (
+                  <>
+                    <div>
+                      <label className={labelCls}>From</label>
+                      <input type="date" value={periodFrom} onChange={e => { setPeriodFrom(e.target.value); resetPages(); }} className={selectCls} />
+                    </div>
+                    <div>
+                      <label className={labelCls}>To</label>
+                      <input type="date" value={periodTo} onChange={e => { setPeriodTo(e.target.value); resetPages(); }} className={selectCls} />
+                    </div>
+                  </>
+                )}
+                <div>
+                  <label className={labelCls}>Rows</label>
+                  <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); resetPages(); }} className={selectCls}>
+                    {[5, 10, 25, 50].map(n => <option key={n} value={n}>{n} / page</option>)}
+                  </select>
+                </div>
+                {detailFiltersActive && (
+                  <button onClick={resetDetailFilters} className="text-xs text-slate-400 hover:text-white px-3 py-2 border border-[#1e345e] rounded-lg transition-colors">Clear filters</button>
+                )}
+              </div>
 
-                {getSupervisorsForBranch(selectedBranch.id).length === 0 ? (
-                  <div className="text-center py-12 text-slate-500">
-                    No supervisors or cash-up history for this branch.
-                  </div>
-                ) : (
-                  getSupervisorsForBranch(selectedBranch.id).map(sup => {
-                    const cashUps = getCashUpsForSupervisorAndBranch(sup.id, selectedBranch.id);
-                    const totalVariance = cashUps.reduce((acc, c) => acc + (c.varianceUsd || 0), 0);
-                    
-                    // Prepare graph data
-                    const chartData = [...cashUps]
-                      .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                      .map(c => ({
-                        date: safeFormat(c.date || new Date(), 'MMM dd'),
-                        variance: c.varianceUsd || 0
-                      }));
+              <div className="px-4 sm:px-6 pt-3 flex gap-1 border-b border-[#1e345e]">
+                {([
+                  { id: 'cashups', label: 'Cash-ups', icon: FileText, count: filteredCashUps.length },
+                  { id: 'supervisors', label: 'Supervisors', icon: ShieldCheck, count: supervisorCards.length },
+                  { id: 'operators', label: 'Till Operators', icon: UserSquare, count: operatorRows.length },
+                ] as const).map(t => (
+                  <button
+                    key={t.id}
+                    onClick={() => setDetailTab(t.id)}
+                    className={clsx(
+                      'flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+                      detailTab === t.id ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-white'
+                    )}
+                  >
+                    <t.icon className="w-4 h-4" /> {t.label}
+                    <span className="text-[10px] font-mono bg-[#112240] border border-[#1e345e] px-1.5 py-0.5 rounded-full">{t.count}</span>
+                  </button>
+                ))}
+              </div>
 
-                    return (
-                      <div key={sup.id} className="bg-[#061121] border border-[#1e345e] rounded-xl overflow-hidden">
-                        <div className="p-4 border-b border-[#1e345e] flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-[#0a192f]">
-                          <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-full shrink-0 bg-[#112240] border border-[#1e345e] flex items-center justify-center text-white font-bold">
-                              {sup.name.charAt(0)}
-                            </div>
-                            <div>
-                              <div className="font-bold text-white flex flex-wrap items-center gap-2">
-                                {sup.name}
-                                <div className={clsx("w-2 h-2 rounded-full", sup.isOnline ? "bg-emerald-500 shadow-[0_0_8px_rgba(52,211,153,0.8)]" : "bg-slate-500")} title={sup.isOnline ? "Online" : "Offline"} />
-                                {sup.branchId !== selectedBranch.id && (
-                                  <span className="text-[10px] uppercase bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full">Past Assigned</span>
-                                )}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+                {detailTab === 'cashups' && (
+                  filteredCashUps.length === 0 ? (
+                    <div className="text-center py-12 text-slate-500">No cash-ups match the selected filters.</div>
+                  ) : (
+                    <>
+                      <div className="overflow-x-auto border border-[#1e345e] rounded-xl">
+                        <table className="w-full text-left text-sm whitespace-nowrap">
+                          <thead className="bg-[#112240] text-slate-400">
+                            <tr>
+                              <th className="px-4 py-2 font-medium">Date</th>
+                              <th className="px-4 py-2 font-medium">Supervisor</th>
+                              <th className="px-4 py-2 font-medium">Sales (USD)</th>
+                              <th className="px-4 py-2 font-medium">Variance (USD)</th>
+                              <th className="px-4 py-2 font-medium">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[#1e345e] bg-[#061121]">
+                            {cashUpView.pageItems.map(c => (
+                              <tr key={c.id} onClick={() => setViewReconId(c.id)} className="hover:bg-[#112240] transition-colors cursor-pointer">
+                                <td className="px-4 py-3 font-mono text-slate-300">{safeFormat(c.date || new Date(), 'MMM dd, yyyy')}</td>
+                                <td className="px-4 py-3 text-slate-300">{supervisorName(c.supervisorId)}</td>
+                                <td className="px-4 py-3 font-medium text-white">{money(totalSalesOf(c))}</td>
+                                <td className={clsx('px-4 py-3 font-medium', varianceColor(c.varianceUsd || 0))}>{signed(c.varianceUsd || 0)}</td>
+                                <td className="px-4 py-3"><StatusBadge status={c.status} /></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <PaginationBar page={cashUpView.currentPage} totalPages={cashUpView.totalPages} totalItems={filteredCashUps.length} pageSize={pageSize} onPageChange={setCashupPage} />
+                    </>
+                  )
+                )}
+
+                {detailTab === 'supervisors' && (
+                  supervisorCards.length === 0 ? (
+                    <div className="text-center py-12 text-slate-500">No supervisors or cash-up history for this branch.</div>
+                  ) : (
+                    <div className="space-y-4">
+                      {supervisorCards.map(sup => {
+                        const cashUps = branchPeriodRecons.filter(r => r.supervisorId === sup.id);
+                        const totalVariance = cashUps.reduce((acc, c) => acc + (c.varianceUsd || 0), 0);
+                        const chartData = [...cashUps]
+                          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                          .map(c => ({ date: safeFormat(c.date || new Date(), 'MMM dd'), variance: c.varianceUsd || 0 }));
+                        return (
+                          <div key={sup.id} className="bg-[#061121] border border-[#1e345e] rounded-xl p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                            <div className="flex items-center gap-4">
+                              <div className="w-10 h-10 rounded-full shrink-0 bg-[#112240] border border-[#1e345e] flex items-center justify-center text-white font-bold">{sup.name.charAt(0)}</div>
+                              <div>
+                                <div className="font-bold text-white flex flex-wrap items-center gap-2">
+                                  {sup.name}
+                                  <div className={clsx("w-2 h-2 rounded-full", sup.isOnline ? "bg-emerald-500 shadow-[0_0_8px_rgba(52,211,153,0.8)]" : "bg-slate-500")} title={sup.isOnline ? "Online" : "Offline"} />
+                                  {sup.branchId !== selectedBranch.id && (
+                                    <span className="text-[10px] uppercase bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full">Past Assigned</span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-slate-400 mt-0.5">
+                                  {sup.isOnline ? 'Online now' : (sup.lastSeen ? `Last seen ${formatDistanceToNow(new Date(sup.lastSeen))} ago` : 'Never logged in')}
+                                </div>
                               </div>
-                              <div className="text-xs text-slate-400 mt-0.5">
-                                {sup.isOnline ? 'Online now' : (sup.lastSeen ? `Last seen ${formatDistanceToNow(new Date(sup.lastSeen))} ago` : 'Never logged in')}
-                              </div>
                             </div>
-                          </div>
-                          
-                          <div className="flex-1 flex justify-start lg:justify-center px-0 lg:px-4 w-full lg:max-w-xs h-16 lg:h-12">
-                            {chartData.length > 0 && (
-                              <div className="w-full h-full flex items-end">
+                            <div className="flex-1 lg:max-w-xs h-14">
+                              {chartData.length > 0 && (
                                 <ResponsiveContainer minWidth={0} minHeight={0} width="100%" height="100%">
                                   <BarChart data={chartData}>
                                     <Tooltip
                                       contentStyle={{ backgroundColor: '#0a192f', border: '1px solid #1e345e', fontSize: '10px' }}
                                       cursor={{ fill: '#1e345e', opacity: 0.4 }}
-                                      formatter={(value: number) => [`$${value.toFixed(2)}`, 'Variance']}
+                                      formatter={(value: number) => [money(value), 'Variance']}
                                       labelStyle={{ color: '#94a3b8' }}
                                     />
                                     <Bar dataKey="variance">
@@ -373,168 +591,105 @@ export function SystemBranches() {
                                     </Bar>
                                   </BarChart>
                                 </ResponsiveContainer>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-4 text-sm whitespace-nowrap">
+                              <div className="text-right">
+                                <div className="text-slate-400 text-xs">Total Variances</div>
+                                <div className={clsx('font-bold text-sm', varianceColor(totalVariance))}>{signed(totalVariance)} USD</div>
                               </div>
-                            )}
+                              <div className="border-l border-[#1e345e] h-8" />
+                              <div><span className="text-slate-400">Cash-ups: </span><span className="text-white font-bold">{cashUps.length}</span></div>
+                              <button
+                                onClick={() => setAlertTarget(sup)}
+                                className="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-400 rounded flex items-center gap-2 transition-colors font-medium text-xs"
+                                title="Send Message"
+                              >
+                                <MessageCircle className="w-4 h-4" /> Message
+                              </button>
+                            </div>
                           </div>
-
-                          <div className="flex flex-wrap sm:flex-nowrap items-center gap-4 text-sm whitespace-nowrap">
-                            <div className="text-right">
-                              <div className="text-slate-400 text-xs">Total Variances</div>
-                              <div className={clsx("font-bold text-sm", totalVariance > 0 ? "text-emerald-400" : totalVariance < 0 ? "text-rose-400" : "text-blue-400")}>
-                                {totalVariance > 0 ? '+' : ''}{totalVariance.toFixed(2)} USD
-                              </div>
-                            </div>
-                            <div className="border-l border-[#1e345e] h-8 mx-2" />
-                            <div>
-                              <span className="text-slate-400">Cash-ups: </span>
-                              <span className="text-white font-bold">{cashUps.length}</span>
-                            </div>
-                            <button 
-                              onClick={() => setAlertTarget(sup)}
-                              className="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-400 rounded flex items-center gap-2 transition-colors font-medium text-xs"
-                              title="Send Message"
-                            >
-                              <MessageCircle className="w-4 h-4" /> Message
-                            </button>
-                          </div>
-                        </div>
-                        <div className="p-0">
-                          {cashUps.length === 0 ? (
-                            <div className="p-4 text-center text-sm text-slate-500">No cash-ups posted yet.</div>
-                          ) : (
-                            <div className="overflow-x-auto">
-                              <table className="w-full text-left text-sm whitespace-nowrap">
-                                <thead className="bg-[#112240] text-slate-400">
-                                  <tr>
-                                    <th className="px-4 py-2 font-medium">Date</th>
-                                    <th className="px-4 py-2 font-medium">Sales (USD)</th>
-                                    <th className="px-4 py-2 font-medium">Variance (USD)</th>
-                                    <th className="px-4 py-2 font-medium">Status</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-[#1e345e]">
-                                  {cashUps.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(c => {
-                                    const ts = Array.isArray(c.totalSales) ? c.totalSales.reduce((a,b)=>a+(b.usdEquivalent||0),0) : (c.totalSales?.usdEquivalent || 0);
-                                    return (
-                                      <tr key={c.id} onClick={() => setViewReconId(c.id)} className="hover:bg-[#112240] transition-colors cursor-pointer">
-                                        <td className="px-4 py-3 font-mono text-slate-300">{safeFormat(c.date || new Date(), 'MMM dd, yyyy')}</td>
-                                        <td className="px-4 py-3 font-medium text-white">${ts.toFixed(2)}</td>
-                                        <td className="px-4 py-3">
-                                          <span className={clsx("font-medium", c.varianceUsd < 0 ? "text-rose-400" : c.varianceUsd > 0 ? "text-emerald-400" : "text-white")}>
-                                            {c.varianceUsd > 0 ? '+' : ''}{c.varianceUsd.toFixed(2)}
-                                          </span>
-                                        </td>
-                                        <td className="px-4 py-3">
-                                          {isAmendmentStatus(c.status) ? (
-                                            <AmendmentStagePills status={c.status} />
-                                          ) : (
-                                            <span className={clsx(
-                                              "px-2 py-1 rounded text-xs font-bold uppercase tracking-wider border",
-                                              c.status === 'APPROVED' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
-                                              c.status === 'FLAGGED' ? "bg-rose-500/10 text-rose-400 border-rose-500/20" :
-                                              "bg-blue-500/10 text-blue-400 border-blue-500/20"
-                                            )}>
-                                              {c.status}
-                                            </span>
-                                          )}
-                                        </td>
-                                      </tr>
-                                    );
-                                  })}
-                                </tbody>
-                              </table>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })
+                        );
+                      })}
+                    </div>
+                  )
                 )}
 
-                <div className="mt-12 mb-4 flex items-center justify-between">
-                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                    <UserSquare className="w-5 h-5 text-indigo-400" /> Till Operators (Cashiers)
-                  </h3>
-                  {currentUser?.role === 'ADMIN' && (
-                    <button 
-                      onClick={() => setIsAssigningOperator(true)}
-                      className="flex items-center gap-2 px-3 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 rounded font-medium text-xs transition-colors"
-                    >
-                      <UserPlus className="w-4 h-4" /> Add / Transfer Operator
-                    </button>
-                  )}
-                </div>
-                
-                {getTillOperatorsForBranch(selectedBranch.id).length === 0 ? (
-                  <div className="text-center py-8 text-slate-500 bg-[#0a192f] rounded-xl border border-[#1e345e]">
-                    No till operators assigned to this branch.
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 gap-4">
-                    {getTillOperatorsForBranch(selectedBranch.id).map(op => {
-                      const opVars = getTillVariancesForOperatorAndBranch(op.id, selectedBranch.id);
-                      const totalOpVariance = opVars.reduce((acc, v) => acc + (v.varianceUsd || 0), 0);
-                      const isCurrent = op.branchId === selectedBranch.id;
-                      
-                      return (
-                        <div key={op.id} className="bg-[#0a192f] border border-[#1e345e] rounded-xl overflow-hidden shadow-sm hover:border-blue-500/30 transition-colors cursor-pointer" onClick={() => setSelectedCashierForHistory({ id: op.id, name: op.name })}>
-                          <div className="p-4 border-b border-[#1e345e] flex items-center justify-between bg-[#112240]">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-[#1e345e] text-slate-300 flex items-center justify-center font-bold text-sm">
-                                {op.name.charAt(0)}
-                              </div>
-                              <div>
-                                <div className="font-bold text-white flex items-center gap-2">
-                                  {op.name}
-                                  {!isCurrent && <span className="text-[10px] uppercase bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full">Transferred</span>}
+                {detailTab === 'operators' && (
+                  <>
+                    {currentUser?.role === 'ADMIN' && (
+                      <div className="flex justify-end mb-4">
+                        <button
+                          onClick={() => setIsAssigningOperator(true)}
+                          className="flex items-center gap-2 px-3 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 rounded font-medium text-xs transition-colors"
+                        >
+                          <UserPlus className="w-4 h-4" /> Add / Transfer Operator
+                        </button>
+                      </div>
+                    )}
+                    {operatorRows.length === 0 ? (
+                      <div className="text-center py-8 text-slate-500 bg-[#0a192f] rounded-xl border border-[#1e345e]">
+                        No till operators found for this branch and period.
+                      </div>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-1 gap-4">
+                          {operatorView.pageItems.map(({ op, vars, total }) => {
+                            const isCurrent = op.branchId === selectedBranch.id;
+                            return (
+                              <div key={op.id} className="bg-[#0a192f] border border-[#1e345e] rounded-xl overflow-hidden shadow-sm hover:border-blue-500/30 transition-colors cursor-pointer" onClick={() => setSelectedCashierForHistory({ id: op.id, name: op.name })}>
+                                <div className="p-4 border-b border-[#1e345e] flex items-center justify-between bg-[#112240]">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-[#1e345e] text-slate-300 flex items-center justify-center font-bold text-sm">{op.name.charAt(0)}</div>
+                                    <div>
+                                      <div className="font-bold text-white flex items-center gap-2">
+                                        {op.name}
+                                        {!isCurrent && <span className="text-[10px] uppercase bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full">Transferred</span>}
+                                      </div>
+                                      <div className="text-xs text-slate-400">{op.email}</div>
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="text-xs text-slate-400 mb-0.5">Net Variance</div>
+                                    <div className={clsx('font-bold text-sm', varianceColor(total))}>{signed(total)} USD</div>
+                                  </div>
                                 </div>
-                                <div className="text-xs text-slate-400">{op.email}</div>
+                                {vars.length > 0 ? (
+                                  <div className="overflow-x-auto p-0">
+                                    <table className="w-full text-left text-xs whitespace-nowrap">
+                                      <thead className="bg-[#061121] text-slate-400 border-b border-[#1e345e]">
+                                        <tr>
+                                          <th className="px-4 py-2 font-medium">Date</th>
+                                          <th className="px-4 py-2 font-medium">Till Name</th>
+                                          <th className="px-4 py-2 font-medium">Expected</th>
+                                          <th className="px-4 py-2 font-medium">Actual</th>
+                                          <th className="px-4 py-2 font-medium">Variance</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-[#1e345e]">
+                                        {vars.map((v, idx) => (
+                                          <tr key={idx} className="hover:bg-[#112240]/50">
+                                            <td className="px-4 py-2 text-slate-300 font-mono">{safeFormat(v.date || new Date(), 'MMM dd, yyyy')}</td>
+                                            <td className="px-4 py-2 text-slate-300">{v.tillName}</td>
+                                            <td className="px-4 py-2 text-slate-400 font-mono">{money(v.expected)}</td>
+                                            <td className="px-4 py-2 text-slate-400 font-mono">{money(v.actual)}</td>
+                                            <td className={clsx('px-4 py-2 font-bold font-mono', v.varianceUsd > 0 ? 'text-emerald-400' : v.varianceUsd < 0 ? 'text-rose-400' : 'text-slate-300')}>{signed(v.varianceUsd)}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                ) : (
+                                  <div className="p-3 text-center text-xs text-slate-500">No till variances recorded.</div>
+                                )}
                               </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-xs text-slate-400 mb-0.5">Net Variance</div>
-                              <div className={clsx("font-bold text-sm", totalOpVariance > 0 ? "text-emerald-400" : totalOpVariance < 0 ? "text-rose-400" : "text-white")}>
-                                {totalOpVariance > 0 ? '+' : ''}{totalOpVariance.toFixed(2)} USD
-                              </div>
-                            </div>
-                          </div>
-                          
-                          {opVars.length > 0 ? (
-                            <div className="overflow-x-auto p-0">
-                              <table className="w-full text-left text-xs whitespace-nowrap">
-                                <thead className="bg-[#061121] text-slate-400 border-b border-[#1e345e]">
-                                  <tr>
-                                    <th className="px-4 py-2 font-medium">Date</th>
-                                    <th className="px-4 py-2 font-medium">Till Name</th>
-                                    <th className="px-4 py-2 font-medium">Expected</th>
-                                    <th className="px-4 py-2 font-medium">Actual</th>
-                                    <th className="px-4 py-2 font-medium">Variance</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-[#1e345e]">
-                                  {opVars.map((v, idx) => (
-                                    <tr key={idx} className="hover:bg-[#112240]/50">
-                                      <td className="px-4 py-2 text-slate-300 font-mono">{safeFormat(v.date || new Date(), 'MMM dd, yyyy')}</td>
-                                      <td className="px-4 py-2 text-slate-300">{v.tillName}</td>
-                                      <td className="px-4 py-2 text-slate-400 font-mono">${v.expected.toFixed(2)}</td>
-                                      <td className="px-4 py-2 text-slate-400 font-mono">${v.actual.toFixed(2)}</td>
-                                      <td className={clsx("px-4 py-2 font-bold font-mono", v.varianceUsd > 0 ? "text-emerald-400" : v.varianceUsd < 0 ? "text-rose-400" : "text-slate-300")}>
-                                        {v.varianceUsd > 0 ? '+' : ''}{v.varianceUsd.toFixed(2)}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          ) : (
-                            <div className="p-3 text-center text-xs text-slate-500">
-                              No till variances recorded.
-                            </div>
-                          )}
+                            );
+                          })}
                         </div>
-                      );
-                    })}
-                  </div>
+                        <PaginationBar page={operatorView.currentPage} totalPages={operatorView.totalPages} totalItems={operatorRows.length} pageSize={OPERATOR_PAGE_SIZE} onPageChange={setOperatorPage} />
+                      </>
+                    )}
+                  </>
                 )}
               </div>
             </>

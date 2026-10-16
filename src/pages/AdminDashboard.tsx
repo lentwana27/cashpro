@@ -2,42 +2,14 @@ import { safeFormat } from '../lib/formatDate';
 import { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { User, Branch, SystemLog } from '../lib/types';
-import { Users, Building2, Megaphone, CheckCircle, ShieldCheck, MapPin, Edit3, X, Download, Database, Activity, Plus, Trash2, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Users, Building2, Megaphone, CheckCircle, ShieldCheck, MapPin, Edit3, X, Download, Database, Activity, Plus, Trash2, Settings } from 'lucide-react';
 import { ExchangeRatesModal } from '../components/ExchangeRatesModal';
 import clsx from 'clsx';
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import { format } from 'date-fns';
+import { PaginationBar } from '../components/PaginationBar';
+import { Period, getPeriodRange, inRange } from '../lib/period';
 
-type UnlockPeriod = 'ALL' | 'TODAY' | 'WEEK' | 'MONTH' | 'CUSTOM';
-
-function PaginationBar({ page, totalPages, totalItems, pageSize, onPageChange }: { page: number; totalPages: number; totalItems: number; pageSize: number; onPageChange: (p: number) => void }) {
-  if (totalItems === 0) return null;
-  const from = (page - 1) * pageSize + 1;
-  const to = Math.min(page * pageSize, totalItems);
-  return (
-    <div className="flex items-center justify-between mt-4 text-xs text-slate-400">
-      <span>Showing {from}-{to} of {totalItems}</span>
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => onPageChange(page - 1)}
-          disabled={page <= 1}
-          className="p-1.5 rounded border border-[#1e345e] bg-[#112240] hover:bg-[#1a2d53] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          aria-label="Previous page"
-        >
-          <ChevronLeft className="w-4 h-4" />
-        </button>
-        <span className="font-mono">Page {page} / {totalPages}</span>
-        <button
-          onClick={() => onPageChange(page + 1)}
-          disabled={page >= totalPages}
-          className="p-1.5 rounded border border-[#1e345e] bg-[#112240] hover:bg-[#1a2d53] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          aria-label="Next page"
-        >
-          <ChevronRight className="w-4 h-4" />
-        </button>
-      </div>
-    </div>
-  );
-}
+type UnlockPeriod = Period;
 
 export function AdminDashboard() {
   const [users, setUsers] = useState<User[]>([]);
@@ -203,21 +175,11 @@ export function AdminDashboard() {
            detailsUpper.includes('FALSE');
   };
 
-  const unlockRange = (() => {
-    const now = new Date();
-    const fmt = (d: Date) => format(d, 'yyyy-MM-dd');
-    if (unlockPeriod === 'TODAY') return { from: fmt(now), to: fmt(now) };
-    if (unlockPeriod === 'WEEK') return { from: fmt(startOfWeek(now, { weekStartsOn: 1 })), to: fmt(endOfWeek(now, { weekStartsOn: 1 })) };
-    if (unlockPeriod === 'MONTH') return { from: fmt(startOfMonth(now)), to: fmt(endOfMonth(now)) };
-    if (unlockPeriod === 'CUSTOM') return { from: unlockFrom, to: unlockTo };
-    return { from: '', to: '' };
-  })();
+  const unlockRange = getPeriodRange(unlockPeriod, unlockFrom, unlockTo);
 
   const matchesUnlockFilters = (r: any) => {
     if (unlockBranchFilter !== 'ALL' && r.branchId !== unlockBranchFilter) return false;
-    if (unlockRange.from && r.date < unlockRange.from) return false;
-    if (unlockRange.to && r.date > unlockRange.to) return false;
-    return true;
+    return inRange(r.date, unlockRange);
   };
   const byDateDesc = (a: any, b: any) => (b.date || '').localeCompare(a.date || '');
 
