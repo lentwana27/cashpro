@@ -1,9 +1,11 @@
 import { safeFormat } from '../lib/formatDate';
 import React, { useState, useMemo } from 'react';
 import { DailyReconciliation, Branch } from '../lib/types';
-import { X, Search } from 'lucide-react';
+import { X } from 'lucide-react';
 import clsx from 'clsx';
 import { format } from 'date-fns';
+import { PaginationBar, paginate } from './PaginationBar';
+import { Period, PERIOD_OPTIONS, getPeriodRange, inRange } from '../lib/period';
 
 export function CashierHistoryModal({
   cashierId,
@@ -18,7 +20,16 @@ export function CashierHistoryModal({
   branches: Branch[];
   onClose: () => void;
 }) {
-  const [searchDate, setSearchDate] = useState('');
+  const [period, setPeriod] = useState<Period>('ALL');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [branchFilter, setBranchFilter] = useState('ALL');
+  const [resultFilter, setResultFilter] = useState<'ALL' | 'SHORT' | 'OVER' | 'BALANCED'>('ALL');
+  const [pageSize, setPageSize] = useState(10);
+  const [page, setPage] = useState(1);
+  React.useEffect(() => { setPage(1); }, [period, from, to, branchFilter, resultFilter, pageSize]);
+  const pickDay = (d: string) => { setPeriod('CUSTOM'); setFrom(d); setTo(d); };
+  const clearFilters = () => { setPeriod('ALL'); setFrom(''); setTo(''); setBranchFilter('ALL'); setResultFilter('ALL'); };
 
   const history = useMemo(() => {
     const records: Array<{ date: string, branchName: string, variance: number, over: number, under: number, zarVariance: number }> = [];
@@ -65,7 +76,15 @@ export function CashierHistoryModal({
     return data;
   }, [history]);
 
-  const filtered = searchDate ? history.filter(h => h.date.includes(searchDate)) : history;
+  const range = getPeriodRange(period, from, to);
+  const branchNames = Array.from(new Set<string>(history.map(h => h.branchName))).sort();
+  const filtered = history
+    .filter(h => inRange(h.date.substring(0, 10), range))
+    .filter(h => branchFilter === 'ALL' || h.branchName === branchFilter)
+    .filter(h => resultFilter === 'ALL' || (resultFilter === 'SHORT' ? h.variance < 0 : resultFilter === 'OVER' ? h.variance > 0 : h.variance === 0));
+  const view = paginate<typeof history[number]>(filtered, page, pageSize);
+  const totals = filtered.reduce((a, h) => ({ over: a.over + h.over, under: a.under + h.under, net: a.net + h.variance }), { over: 0, under: 0, net: 0 });
+  const filtersActive = period !== 'ALL' || branchFilter !== 'ALL' || resultFilter !== 'ALL';
 
 
   return (
@@ -99,21 +118,50 @@ export function CashierHistoryModal({
                     d.variance === 0 ? "bg-slate-500" :
                     d.variance > 0 ? "bg-emerald-500" : "bg-rose-500"
                   )}
-                  onClick={() => setSearchDate(d.date)}
+                  onClick={() => pickDay(d.date)}
                 />
               ))}
             </div>
           </div>
 
-          <div className="mb-6 relative">
-            <Search className="w-5 h-5 absolute left-3 top-2.5 text-slate-400" />
-            <input
-              type="date"
-              value={searchDate}
-              onChange={e => setSearchDate(e.target.value)}
-              className="w-full bg-[#061121] border border-[#1e345e] rounded-lg py-2 pl-10 pr-4 text-white focus:outline-none focus:border-blue-500"
-              style={{ colorScheme: 'dark' }}
-            />
+          <div className="mb-4 flex flex-wrap items-end gap-3">
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Period</label>
+              <select value={period} onChange={e => setPeriod(e.target.value as Period)} className="bg-[#061121] border border-[#1e345e] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                {PERIOD_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+            {period === 'CUSTOM' && (
+              <>
+                <div><label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">From</label><input type="date" value={from} onChange={e => setFrom(e.target.value)} className="bg-[#061121] border border-[#1e345e] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" style={{ colorScheme: 'dark' }} /></div>
+                <div><label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">To</label><input type="date" value={to} onChange={e => setTo(e.target.value)} className="bg-[#061121] border border-[#1e345e] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" style={{ colorScheme: 'dark' }} /></div>
+              </>
+            )}
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Branch</label>
+              <select value={branchFilter} onChange={e => setBranchFilter(e.target.value)} className="bg-[#061121] border border-[#1e345e] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                <option value="ALL">All Branches</option>
+                {branchNames.map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Result</label>
+              <select value={resultFilter} onChange={e => setResultFilter(e.target.value as any)} className="bg-[#061121] border border-[#1e345e] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                <option value="ALL">All Results</option>
+                <option value="SHORT">Shortages</option>
+                <option value="OVER">Overs</option>
+                <option value="BALANCED">Balanced</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Rows</label>
+              <select value={pageSize} onChange={e => setPageSize(Number(e.target.value))} className="bg-[#061121] border border-[#1e345e] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                {[5, 10, 25, 50].map(n => <option key={n} value={n}>{n} / page</option>)}
+              </select>
+            </div>
+            {filtersActive && (
+              <button onClick={clearFilters} className="text-xs text-slate-400 hover:text-white px-3 py-2.5 border border-[#1e345e] rounded-lg transition-colors">Clear filters</button>
+            )}
           </div>
 
           <div className="overflow-x-auto border border-[#1e345e] rounded-xl">
@@ -135,7 +183,7 @@ export function CashierHistoryModal({
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((r, i) => (
+                  view.pageItems.map((r, i) => (
                     <tr key={i} className="hover:bg-[#112240]/50 transition-colors">
                       <td className="px-6 py-4 text-slate-300">
                         {safeFormat(r.date || new Date(), 'MMM dd, yyyy')}
@@ -157,8 +205,19 @@ export function CashierHistoryModal({
                   ))
                 )}
               </tbody>
+              {filtered.length > 0 && (
+                <tfoot className="bg-[#112240] text-sm font-bold">
+                  <tr>
+                    <td className="px-6 py-3 text-slate-300" colSpan={2}>Total ({filtered.length} record{filtered.length === 1 ? '' : 's'})</td>
+                    <td className="px-6 py-3 text-right font-mono text-emerald-400">{totals.over > 0 ? '+' : ''}{totals.over.toFixed(2)}</td>
+                    <td className="px-6 py-3 text-right font-mono text-rose-400">{totals.under < 0 ? totals.under.toFixed(2) : '0.00'}</td>
+                    <td className={clsx('px-6 py-3 text-right font-mono', totals.net > 0 ? 'text-emerald-400' : totals.net < 0 ? 'text-rose-400' : 'text-slate-400')}>{totals.net > 0 ? '+' : ''}{totals.net.toFixed(2)}</td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
+          <PaginationBar page={view.currentPage} totalPages={view.totalPages} totalItems={filtered.length} pageSize={pageSize} onPageChange={setPage} />
         </div>
       </div>
     </div>
