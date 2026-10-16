@@ -7,12 +7,25 @@ import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../components/AuthProvider';
 import { Branch } from '../lib/types';
 import { Pencil, Trash2, Plus, Lock, Search } from 'lucide-react';
+import { PaginationBar, paginate } from '../components/PaginationBar';
+
+const ROLE_LABELS: Record<string, string> = {
+  CASHIER: 'Till Operator', SUPERVISOR: 'Supervisor', ACCOUNTANT: 'Accountant', HEAD_ACCOUNTANT: 'Head Accountant',
+  AUDITOR: 'Auditor', DIRECTOR: 'Director', ADMIN: 'Admin',
+};
+const selectCls = 'bg-[#112240] border border-[#1e345e] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500';
+const labelCls = 'block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1';
 
 
 export function SystemUsers() {
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [roleFilter, setRoleFilter] = useState('ALL');
+  const [branchFilter, setBranchFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [pageSize, setPageSize] = useState(10);
+  const [page, setPage] = useState(1);
   const [alertTarget, setAlertTarget] = useState<User | null>(null);
   const [alertMessage, setAlertMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -142,12 +155,28 @@ export function SystemUsers() {
     }
   };
 
-  const filteredUsers = (users || []).filter((u) =>
+  const textMatches = (u: User) =>
     (u.name || "").toLowerCase().includes((searchQuery || "").toLowerCase()) ||
     (u.email || "").toLowerCase().includes((searchQuery || "").toLowerCase()) ||
     (u.role || "").toLowerCase().includes((searchQuery || "").toLowerCase()) ||
-    ((branches || []).find((b) => b.id === u.branchId)?.name || "").toLowerCase().includes((searchQuery || "").toLowerCase())
-  );
+    ((branches || []).find((b) => b.id === u.branchId)?.name || "").toLowerCase().includes((searchQuery || "").toLowerCase());
+
+  const statusMatches = (u: User) =>
+    statusFilter === 'ALL' ||
+    (statusFilter === 'ONLINE' && !!u.isOnline) ||
+    (statusFilter === 'OFFLINE' && !u.isOnline) ||
+    (statusFilter === 'INACTIVE' && !u.active) ||
+    (statusFilter === 'PENDING_DELETION' && !!u.pendingDeletion);
+
+  const filteredUsers = (users || [])
+    .filter(textMatches)
+    .filter(u => roleFilter === 'ALL' || u.role === roleFilter)
+    .filter(u => branchFilter === 'ALL' || (branchFilter === 'NONE' ? !u.branchId : u.branchId === branchFilter))
+    .filter(statusMatches);
+  const userView = paginate<User>(filteredUsers, page, pageSize);
+  const rolesPresent = Array.from(new Set<string>((users || []).map(u => u.role as string)));
+  const filtersActive = !!searchQuery || roleFilter !== 'ALL' || branchFilter !== 'ALL' || statusFilter !== 'ALL';
+  const clearFilters = () => { setSearchQuery(''); setRoleFilter('ALL'); setBranchFilter('ALL'); setStatusFilter('ALL'); setPage(1); };
 
   return (
     <div className="space-y-6">
@@ -185,10 +214,46 @@ export function SystemUsers() {
               type="text"
               placeholder="Search users..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
               className="w-full bg-[#112240] border border-[#1e345e] text-white pl-9 pr-3 py-2 rounded-lg text-sm focus:outline-none focus:border-emerald-500 transition-colors placeholder-slate-500"
             />
           </div>
+        </div>
+        <div className="px-4 sm:px-6 py-3 border-b border-[#1e345e] bg-[#061121]/60 flex flex-wrap items-end gap-3">
+          <div>
+            <label className={labelCls}>Role</label>
+            <select value={roleFilter} onChange={e => { setRoleFilter(e.target.value); setPage(1); }} className={selectCls}>
+              <option value="ALL">All Roles</option>
+              {rolesPresent.map(r => <option key={r} value={r}>{ROLE_LABELS[r] || r}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>Branch</label>
+            <select value={branchFilter} onChange={e => { setBranchFilter(e.target.value); setPage(1); }} className={selectCls}>
+              <option value="ALL">All Branches</option>
+              <option value="NONE">No Branch</option>
+              {(branches || []).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>Status</label>
+            <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }} className={selectCls}>
+              <option value="ALL">All Statuses</option>
+              <option value="ONLINE">Online</option>
+              <option value="OFFLINE">Offline</option>
+              <option value="INACTIVE">Inactive (not approved)</option>
+              <option value="PENDING_DELETION">Pending deletion</option>
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>Rows</label>
+            <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }} className={selectCls}>
+              {[5, 10, 25, 50].map(n => <option key={n} value={n}>{n} / page</option>)}
+            </select>
+          </div>
+          {filtersActive && (
+            <button onClick={clearFilters} className="text-xs text-slate-400 hover:text-white px-3 py-2 border border-[#1e345e] rounded-lg transition-colors">Clear filters</button>
+          )}
         </div>
         <div className="p-0">
           <div className="overflow-x-auto">
@@ -202,7 +267,7 @@ export function SystemUsers() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#1e345e]">
-                {filteredUsers.map(u => (
+                {userView.pageItems.map(u => (
                   <tr key={u.id} className="hover:bg-[#112240]/50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
@@ -324,6 +389,9 @@ export function SystemUsers() {
               </tbody>
             </table>
           </div>
+        </div>
+        <div className="px-4 sm:px-6 pb-4">
+          <PaginationBar page={userView.currentPage} totalPages={userView.totalPages} totalItems={filteredUsers.length} pageSize={pageSize} onPageChange={setPage} />
         </div>
       </div>
 
