@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ReconModal } from '../components/ReconModal';
 import { ExchangeRatesModal } from '../components/ExchangeRatesModal';
 import { AmendmentStagePills, isAmendmentStatus } from '../components/AmendmentStagePills';
+import { AmendmentRequestsTable } from '../components/AmendmentRequestsTable';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../components/AuthProvider';
 import { PaginationBar, paginate } from '../components/PaginationBar';
@@ -34,6 +35,8 @@ export function AccountantDashboard() {
 
   const [editingSalesId, setEditingSalesId] = useState<string | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [tab, setTab] = useState<'review' | 'amendments'>('review');
+  const [users, setUsers] = useState<any[]>([]);
 
   useEffect(() => {
     loadData();
@@ -43,11 +46,13 @@ export function AccountantDashboard() {
 
   const loadData = async () => {
     try {
-      const [recs, rts, brs] = await Promise.all([
+      const [recs, rts, brs, usrs] = await Promise.all([
         api.get('/reconciliations'),
         api.get('/rates'),
-        api.get('/branches')
+        api.get('/branches'),
+        api.get('/users').catch(() => [])
       ]);
+      setUsers(usrs);
       setReconciliations(recs.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()));
       setRates(rts);
       setBranches(brs);
@@ -125,6 +130,10 @@ export function AccountantDashboard() {
     return missing.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [branches, reconciliations]);
 
+  // Only Head Accountants (and Admins) can approve the Head Accountant stage of an amendment.
+  const canApproveHeadStage = user?.role === 'HEAD_ACCOUNTANT' || user?.role === 'ADMIN';
+  const awaitingHead = reconciliations.filter((r: any) => r.status === 'AMENDMENT_PENDING_HEAD_ACCOUNTANT').length;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -147,6 +156,39 @@ export function AccountantDashboard() {
         </div>
       </div>
 
+      <div className="flex gap-1 border-b border-[#1e345e]">
+        {([
+          { id: 'review', label: 'Reconciliation Review', count: null as number | null },
+          { id: 'amendments', label: 'Amendment Requests', count: canApproveHeadStage ? awaitingHead : null },
+        ] as const).map(t => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={clsx(
+              'flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
+              tab === t.id ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-white'
+            )}
+          >
+            {t.label}
+            {t.count !== null && t.count > 0 && (
+              <span className="text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 rounded-full px-2 py-0.5" title="Awaiting your approval">{t.count}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'amendments' && (
+        <AmendmentRequestsTable
+          reconciliations={reconciliations}
+          branches={branches}
+          users={users}
+          onView={setViewingRecon}
+          onApprove={approveAmendment}
+          approvableStatus={canApproveHeadStage ? 'AMENDMENT_PENDING_HEAD_ACCOUNTANT' : '__NONE__'}
+        />
+      )}
+
+      {tab === 'review' && (<>
       {missingReconciliations.length > 0 && (
         <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 sm:p-6 shadow-inner">
           <div className="flex items-center gap-3 mb-4">
@@ -315,6 +357,8 @@ export function AccountantDashboard() {
           </div>
         </div>
       </div>
+
+      </>)}
 
       <AnimatePresence>
         {showRates && (
