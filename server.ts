@@ -39,6 +39,13 @@ function requireRole(...roles: string[]) {
   };
 }
 
+// Never send credentials to the browser.
+function publicUser(u: any) {
+  if (!u) return u;
+  const { passwordHash, twoFactorCode, ...rest } = u;
+  return rest;
+}
+
 async function logAction(userId: string, userName: string, action: string, details: string) {
   try {
     await db.insert(schema.systemLogs).values({
@@ -104,7 +111,7 @@ api.post('/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Account pending admin approval' });
     }
     await db.update(schema.users).set({ isOnline: true, lastSeen: new Date().toISOString() }).where(eq(schema.users.id, user.id));
-    res.json({ user, token: 'fake-jwt-token-replace-later' });
+    res.json({ user: publicUser(user), token: 'fake-jwt-token-replace-later' });
   } else {
     res.status(401).json({ error: 'Invalid credentials' });
   }
@@ -127,8 +134,7 @@ api.post('/auth/verify-2fa', async (req, res) => {
   if (!user.twoFactorCode) {
     // First time setup
     await db.update(schema.users).set({ twoFactorCode: code, isOnline: true, lastSeen: new Date().toISOString() }).where(eq(schema.users.id, user.id));
-    user.twoFactorCode = code;
-    return res.json({ user, token: 'fake-jwt-token-replace-later' });
+    return res.json({ user: publicUser(user), token: 'fake-jwt-token-replace-later' });
   }
   
   if (code !== user.twoFactorCode) {
@@ -136,7 +142,7 @@ api.post('/auth/verify-2fa', async (req, res) => {
   }
   
   await db.update(schema.users).set({ isOnline: true, lastSeen: new Date().toISOString() }).where(eq(schema.users.id, user.id));
-  res.json({ user, token: 'fake-jwt-token-replace-later' });
+  res.json({ user: publicUser(user), token: 'fake-jwt-token-replace-later' });
 });
 
 api.post('/auth/logout', async (req, res) => {
@@ -224,7 +230,7 @@ api.get('/users', async (req, res) => {
     if (u.lastSeen) {
       online = (now - new Date(u.lastSeen).getTime()) < 60000;
     }
-    return { ...u, isOnline: online };
+    return { ...publicUser(u), isOnline: online };
   });
   res.json(users);
 });
@@ -241,7 +247,7 @@ api.post('/users', async (req, res) => {
     user.createdAt = new Date();
   }
   await db.insert(schema.users).values(user);
-  res.json(user);
+  res.json(publicUser(user));
 });
 api.put('/users/:id', async (req, res) => {
   const data = { ...req.body };
@@ -350,7 +356,36 @@ api.delete('/reconciliations/:id', requireRole('ADMIN'), async (req, res) => {
 });
 
 api.get('/reconciliations', async (req, res) => {
+  const uid = req.headers['x-user-id'] as string;
+  if (!uid) {
+    return res.status(401).json({ error: 'Missing user identity' });
+  }
+  const requesters = await db.select().from(schema.users).where(eq(schema.users.id, uid));
+  const requester = requesters[0];
+  if (!requester) {
+    return res.status(401).json({ error: 'Unknown user' });
+  }
   const recs = await db.select().from(schema.reconciliations).orderBy(desc(schema.reconciliations.createdAt));
+
+  // Cashiers only get the cash-ups that include one of their own tills, reduced to the
+  // fields they need (no sales/expense breakdowns, notes, amendment reasons or other cashiers' tills).
+  if (requester.role === 'CASHIER') {
+    const own = recs
+      .map((r: any) => {
+        const tills = (Array.isArray(r.tillVariances) ? r.tillVariances : []).filter((tv: any) => tv && tv.cashierId === uid);
+        return tills.length === 0 ? null : {
+          id: r.id,
+          branchId: r.branchId,
+          date: r.date,
+          status: r.status,
+          createdAt: r.createdAt,
+          tillVariances: tills,
+        };
+      })
+      .filter(Boolean);
+    return res.json(own);
+  }
+
   res.json(recs);
 });
 api.post('/reconciliations', async (req, res) => {
